@@ -46,7 +46,7 @@ const AnalysisCard: React.FC<AnalysisCardProps> = ({ unlocked, title, icon: Icon
   const { username } = useParams()
 
   const isRoast = title === 'Roast'
-  const isContentVisible = isRoast || unlocked
+  const isContentVisible = true;
 
   const renderContent = useCallback(() => {
     if (typeof content === 'string') {
