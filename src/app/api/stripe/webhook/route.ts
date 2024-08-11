@@ -1,47 +1,50 @@
-import { revalidatePath } from 'next/cache'
-import { headers } from 'next/headers'
-import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
 
-import { unlockPair, unlockUser } from '@/actions/actions'
-import { stripe } from '@/lib/stripe'
-
-// import { changeSubscriptionStatus } from '@/utils/server-actions/stripe'
+import { unlockPair, unlockUser } from '@/actions/actions';
+import { stripe } from '@/lib/stripe';
 
 /**
  * Set of Stripe event types that this webhook handler will process
  */
 const relevantEvents = new Set([
-  //   'product.created',
-  //   'product.updated',
-  //   'price.created',
-  //   'price.updated',
   'checkout.session.completed',
-  //   'customer.subscription.created',
-  //   'customer.subscription.updated',
-  //   'customer.subscription.deleted',
-])
+]);
 
 /**
  * Handles POST requests for Stripe webhook events
  * @param {Request} req - The incoming request object
  */
 export async function POST(req: Request) {
-  const body = await req.text()
-  const signature = headers().get('Stripe-Signature') as string
-  console.log('🟣 | file: route.ts:30 | POST | signature:', signature)
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-  console.log('🟣 | file: route.ts:32 | POST | webhookSecret:', webhookSecret)
+  const body = await req.text();
+  const signature = headers().get('Stripe-Signature') as string;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  let event: Stripe.Event
+  // Log incoming Stripe signature and webhook secret for debugging
+  console.log('🟣 | file: route.ts | POST | signature:', signature);
+  console.log('🟣 | file: route.ts | POST | webhookSecret:', webhookSecret);
+
+  // Log environment variables related to Stripe
+  console.log('🟣 | file: route.ts | STRIPE_PRICE_ID:', process.env.STRIPE_PRICE_ID);
+  console.log('🟣 | file: route.ts | STRIPE_PRODUCT_ID:', process.env.STRIPE_PRODUCT_ID);
+
+  let event: Stripe.Event;
 
   try {
     // Verify and construct the Stripe event
-    if (!signature || !webhookSecret) return
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+    if (!signature || !webhookSecret) {
+      console.error('❗️ Missing Stripe signature or webhook secret.');
+      return new Response('Missing Stripe signature or webhook secret.', { status: 400 });
+    }
+
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    console.log('🟣 | file: route.ts | POST | Constructed Stripe Event:', event);
+
   } catch (err: any) {
-    console.warn('❗️ Webhook Error:', err.message)
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 })
+    console.warn('❗️ Webhook Error:', err.message);
+    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
   // Process the event if it's one we're interested in
@@ -49,38 +52,35 @@ export async function POST(req: Request) {
     try {
       switch (event.type) {
         case 'checkout.session.completed':
-          const checkoutSession = event.data.object as Stripe.Checkout.Session
-          console.log('🟣 Checkout Session Completed:', checkoutSession)
+          const checkoutSession = event.data.object as Stripe.Checkout.Session;
+          console.log('🟣 Checkout Session Completed:', checkoutSession);
+
+          // Log metadata for debugging
+          console.log('🟣 | file: route.ts | Checkout Session Metadata:', checkoutSession.metadata);
 
           if (checkoutSession.metadata?.type === 'pair') {
-            const [username1, username2] = [checkoutSession.metadata.username1, checkoutSession.metadata.username2].sort()
-            console.log('Webhook: UNLOCKING PAIR: ', username1, username2)
-            await unlockPair({ username1, username2, unlockType: 'stripe' })
+            const [username1, username2] = [checkoutSession.metadata.username1, checkoutSession.metadata.username2].sort();
+            console.log('Webhook: UNLOCKING PAIR:', username1, username2);
+            await unlockPair({ username1, username2, unlockType: 'stripe' });
           }
           if (checkoutSession.metadata?.type === 'user') {
-            console.log('Webhook: UNLOCKING USER: ', checkoutSession.metadata.username)
-            await unlockUser({ username: checkoutSession.metadata.username, unlockType: 'stripe' })
-            revalidatePath(`/${checkoutSession.metadata.username}`)
+            console.log('Webhook: UNLOCKING USER:', checkoutSession.metadata.username);
+            await unlockUser({ username: checkoutSession.metadata.username, unlockType: 'stripe' });
+            revalidatePath(`/${checkoutSession.metadata.username}`);
           }
-
-          // if (checkoutSession.metadata?.username) {
-          //   await unlockUser({ username: checkoutSession.metadata.username, unlockType: 'stripe' })
-          //   revalidatePath(`/${checkoutSession.metadata.username}`)
-          // } else {
-          //   console.error('Username not found in checkout session metadata')
-          // }
-          break
+          break;
         default:
-          throw new Error('Unhandled relevant event!')
+          console.error('❗️ Unhandled relevant event:', event.type);
+          throw new Error('Unhandled relevant event!');
       }
     } catch (error) {
-      console.warn('❗️ Webhook handler failed:', error)
-      return new Response('Webhook handler failed. View your nextjs function logs.', {
+      console.warn('❗️ Webhook handler failed:', error);
+      return new Response('Webhook handler failed. View your next.js function logs.', {
         status: 400,
-      })
+      });
     }
   }
 
   // Acknowledge receipt of the event
-  return NextResponse.json({ received: true })
+  return NextResponse.json({ received: true });
 }
