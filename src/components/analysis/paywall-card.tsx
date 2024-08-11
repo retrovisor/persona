@@ -21,6 +21,8 @@ const FormSchema = z.object({
 
 export const PriceButton = ({ username, price }: { username: string; price: string }) => (
   console.log('Price received in PriceButton:', price),
+    console.log('Username received in PriceButton:', username); // Add this log
+
   <Button
     onClick={() => {
       createCheckoutSession({ username, priceInt: parseInt(price), type: 'user' });
