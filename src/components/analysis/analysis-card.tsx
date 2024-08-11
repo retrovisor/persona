@@ -3,7 +3,7 @@ import { useParams } from 'next/navigation'
 import { IconType } from 'react-icons'
 import { PiXLogo } from 'react-icons/pi'
 
- import { Markdown } from '@/components/markdown'
+import { Markdown } from '@/components/markdown'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -27,7 +27,6 @@ type ContentType = string | string[] | ContentItem[] | { [key: string]: string |
  * Props for the AnalysisCard component.
  */
 interface AnalysisCardProps {
-  unlocked: boolean
   title: string
   icon: IconType
   content: ContentType
@@ -42,16 +41,13 @@ interface AnalysisCardProps {
  * AnalysisCard component displays a card with analysis content.
  * It can render different types of content based on the ContentType.
  */
-const AnalysisCard: React.FC<AnalysisCardProps> = ({ unlocked, title, icon: Icon, content, colorClass, contentKey, wide = false, bg }) => {
+const AnalysisCard: React.FC<AnalysisCardProps> = ({ title, icon: Icon, content, colorClass, contentKey, wide = false, bg }) => {
   const { username } = useParams()
 
-  const isRoast = title === 'Roast'
-  const isContentVisible = true;
+  const isContentVisible = true
 
   const renderContent = useCallback(() => {
     if (typeof content === 'string') {
-      // const displayContent = isContentVisible ? content : obfuscateContent(content)
-
       return (
         <div className={`space-y-2 ${!isContentVisible ? 'blur-sm' : ''}`}>
           {/* Use a key to force re-render when content changes */}
@@ -125,11 +121,7 @@ const AnalysisCard: React.FC<AnalysisCardProps> = ({ unlocked, title, icon: Icon
           </CardHeader>
           <CardContent className="flex flex-col text-gray-700">{renderContent()}</CardContent>
         </div>
-        <CardFooter className={`flex items-center justify-end space-x-2`}>
-           
-
-         
-        </CardFooter>
+        <CardFooter className={`flex items-center justify-end space-x-2`}></CardFooter>
       </div>
     </Card>
   )
