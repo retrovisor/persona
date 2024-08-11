@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
  
-import Quote from '@/app/quote'
+
 import WordwareLogo from '@/components/logo'
 import NewPairFormBothNames from '@/components/new-pair-form-both-names'
 import NewUsernameForm from '@/components/new-username-form'
@@ -106,11 +106,7 @@ const Page = () => {
             </div>
           </div>
         </div>
-        <div className="flex h-full w-full items-center justify-center bg-[#F6F0F0] md:h-auto md:w-1/2">
-          <div className="hidden md:block">
-            <Quote />
-          </div>
-        </div>
+         
       </div>
       <TopList />
     </section>
