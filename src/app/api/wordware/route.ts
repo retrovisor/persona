@@ -71,7 +71,8 @@ const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${prom
       profilePicture: user.profilePicture,
       profileInfo: user.fullProfile,
       version: '^1.0',
-    twitterHandle: username,  // Add the Twitter Handle here
+    "Twitter Handle": username  // Use exact field name with correct casing and spacing
+
 
     },
   }),
