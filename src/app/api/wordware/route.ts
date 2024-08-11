@@ -36,6 +36,7 @@ export async function POST(request: Request) {
   }
 
   function formatTweet(tweet: TweetType) {
+    // console.log('Formatting', tweet)
     const isRetweet = tweet.isRetweet ? 'RT ' : ''
     const author = tweet.author?.userName ?? username
     const createdAt = tweet.createdAt
@@ -58,34 +59,39 @@ export async function POST(request: Request) {
   const promptID = full ? process.env.WORDWARE_FULL_PROMPT_ID : process.env.WORDWARE_ROAST_PROMPT_ID
 
   // Make a request to the Wordware API
-  const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
+const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
+  },
+  body: JSON.stringify({
+    inputs: {
+      tweets: `Tweets: ${tweetsMarkdown}`,
+      profilePicture: user.profilePicture,
+      profileInfo: user.fullProfile,
+      version: '^1.0',
+    twitterHandle: username,  // Add the Twitter Handle here
+
     },
-    body: JSON.stringify({
-      inputs: {
-        "Twitter Handle": username  // Use the exact field name with proper casing and spacing
-      },
-      version: "^1.0",  // Ensure the version is included as documented
-    }),
-  });
+  }),
+});
 
-  // Log the response status and body
-  if (!runResponse.ok) {
-    const responseBody = await runResponse.text();  // Read the response body
-    console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse);
-    console.log('🟣 | Response Body:', responseBody);  // Log the response body
-    return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
-  }
+// Log the response status and body
+if (!runResponse.ok) {
+  const responseBody = await runResponse.text();  // Read the response body
+  console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse);
+  console.log('🟣 | Response Body:', responseBody);  // Log the response body
+  return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
+}
 
-  // Proceed if the response is okay
-  const reader = runResponse.body?.getReader();
-  if (!reader) {
-    console.log('❗️ | No reader available in the response');
-    return Response.json({ error: 'No reader' }, { status: 400 });
-  }
+// Proceed if the response is okay
+const reader = runResponse.body?.getReader();
+if (!reader) {
+  console.log('❗️ | No reader available in the response');
+  return Response.json({ error: 'No reader' }, { status: 400 });
+}
+
 
   // Update user to indicate Wordware has started
   await updateUser({
@@ -115,6 +121,7 @@ export async function POST(request: Request) {
           }
 
           const chunk = decoder.decode(value)
+          // console.log('🟣 | file: route.ts:80 | start | chunk:', chunk)
 
           // Process the chunk character by character
           for (let i = 0, len = chunk.length; i < len; ++i) {
@@ -137,10 +144,12 @@ export async function POST(request: Request) {
                 if (value.label === 'output') {
                   finalOutput = true
                 }
+                // console.log('\nNEW GENERATION -', value.label)
               } else {
                 if (value.label === 'output') {
                   finalOutput = false
                 }
+                // console.log('\nEND GENERATION -', value.label)
               }
             } else if (value.type === 'chunk') {
               if (finalOutput) {
@@ -166,6 +175,7 @@ export async function POST(request: Request) {
                     },
                   },
                 })
+                // console.log('Analysis saved to database')
               } catch (error) {
                 console.error('Error parsing or saving output:', error)
 
