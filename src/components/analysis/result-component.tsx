@@ -1,29 +1,30 @@
-'use client'
+'use client';
 
-import { useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
-import posthog from 'posthog-js'
+import { useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-import { PriceButton } from '@/components/analysis/paywall-card'
-import { SelectUser } from '@/drizzle/schema'
-import { useTwitterAnalysis } from '@/hooks/twitter-analysis'
-import { analysisPlaceholder } from '@/lib/constants'
+import { PriceButton } from '@/components/analysis/paywall-card';
+import { SelectUser } from '@/drizzle/schema';
+import { useTwitterAnalysis } from '@/hooks/twitter-analysis';
+import { analysisPlaceholder } from '@/lib/constants';
 
-import NewPairForm from '../new-pair-form'
-import { Analysis, TwitterAnalysis } from './analysis'
-import { ProgressIndicator, StepIndicator } from './progress-indicator'
+import NewPairForm from '../new-pair-form';
+import { Analysis, TwitterAnalysis } from './analysis';
+import { ProgressIndicator, StepIndicator } from './progress-indicator';
 
 const ResultComponent = ({ user }: { user: SelectUser }) => {
-  const { steps, result } = useTwitterAnalysis(user)
-  const searchParams = useSearchParams()
+  const { steps, result } = useTwitterAnalysis(user);
+  const searchParams = useSearchParams();
 
-  const paywallFlag = posthog.getFeatureFlag('paywall2') ?? searchParams.get('stripe')
+  // Remove PostHog and handle the paywallFlag similarly to PaywallCard
+  const paywallFlag = searchParams.get('stripe') ?? '1000'; // Default price in cents ($10.00)
+  console.log('Final paywallFlag value in ResultComponent:', paywallFlag);
 
   const prepareUserData = useCallback((result: TwitterAnalysis | undefined, unlocked: boolean): TwitterAnalysis | undefined => {
-    if (!result) return undefined
-    if (!result.roast) return result
+    if (!result) return undefined;
+    if (!result.roast) return result;
 
-    if (unlocked) return result
+    if (unlocked) return result;
 
     // Merge placeholders with the result if not unlocked
     return {
@@ -32,8 +33,8 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
       strengths: analysisPlaceholder.strengths,
       weaknesses: analysisPlaceholder.weaknesses,
       pickupLines: analysisPlaceholder.pickupLines,
-    }
-  }, [])
+    };
+  }, []);
 
   return (
     <div className="flex-center flex-col gap-8">
@@ -48,7 +49,6 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
           price={paywallFlag as string}
         />
       )}
-       
 
       <div className="flex-center w-full flex-col gap-4">
         <div className="text-center text-lg font-light">Add new user to find if you are compatible souls</div>
@@ -76,7 +76,7 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
         />
       )}
     </div>
-  )
-}
+  );
+};
 
-export default ResultComponent
+export default ResultComponent;
