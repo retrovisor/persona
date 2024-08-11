@@ -13,11 +13,15 @@ export const maxDuration = 300
  * @returns {Promise<Response>} The response object
  */
 export async function POST(request: Request) {
+  console.log('🟢 | Starting POST handler'); // New log to confirm POST handler starts
+
   // Extract username from the request body
   const { username, full } = await request.json()
+  console.log('🟢 | Extracted request body:', { username, full }); // Log the request body
 
   // Fetch user data and check if Wordware has already been started
   const user = await getUser({ username })
+  console.log('🟢 | Fetched user:', user); // Log fetched user data
 
   if (!user) {
     throw Error(`User not found: ${username}`)
@@ -36,7 +40,6 @@ export async function POST(request: Request) {
   }
 
   function formatTweet(tweet: TweetType) {
-    // console.log('Formatting', tweet)
     const isRetweet = tweet.isRetweet ? 'RT ' : ''
     const author = tweet.author?.userName ?? username
     const createdAt = tweet.createdAt
@@ -53,46 +56,47 @@ export async function POST(request: Request) {
   }
 
   const tweets = user.tweets as TweetType[]
+  console.log('🟢 | Formatted tweets:', tweets); // Log formatted tweets
 
   const tweetsMarkdown = tweets.map(formatTweet).join('\n---\n\n')
 
   const promptID = full ? process.env.WORDWARE_FULL_PROMPT_ID : process.env.WORDWARE_ROAST_PROMPT_ID
+  console.log('🟢 | Using promptID:', promptID); // Log the prompt ID
 
   // Make a request to the Wordware API
-const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
-  },
-  body: JSON.stringify({
-    inputs: {
-      tweets: `Tweets: ${tweetsMarkdown}`,
-      profilePicture: user.profilePicture,
-      profileInfo: user.fullProfile,
-      version: '^1.0',
-    "Twitter Handle": username  // Use exact field name with correct casing and spacing
-
-
+  const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
     },
-  }),
-});
+    body: JSON.stringify({
+      inputs: {
+        tweets: `Tweets: ${tweetsMarkdown}`,
+        profilePicture: user.profilePicture,
+        profileInfo: user.fullProfile,
+        version: '^1.0',
+        "Twitter Handle": username  // Use exact field name with correct casing and spacing
+      },
+    }),
+  });
 
-// Log the response status and body
-if (!runResponse.ok) {
-  const responseBody = await runResponse.text();  // Read the response body
-  console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse);
-  console.log('🟣 | Response Body:', responseBody);  // Log the response body
-  return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
-}
+  // Log the response status and body
+  if (!runResponse.ok) {
+    const responseBody = await runResponse.text();  // Read the response body
+    console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse);
+    console.log('🟣 | Response Body:', responseBody);  // Log the response body
+    return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
+  }
 
-// Proceed if the response is okay
-const reader = runResponse.body?.getReader();
-if (!reader) {
-  console.log('❗️ | No reader available in the response');
-  return Response.json({ error: 'No reader' }, { status: 400 });
-}
+  // Proceed if the response is okay
+  const reader = runResponse.body?.getReader();
+  if (!reader) {
+    console.log('❗️ | No reader available in the response');
+    return Response.json({ error: 'No reader' }, { status: 400 });
+  }
 
+  console.log('🟢 | Stream reader created'); // Log that the reader was created
 
   // Update user to indicate Wordware has started
   await updateUser({
@@ -103,6 +107,8 @@ if (!reader) {
     },
   })
 
+  console.log('🟢 | Updated user to indicate Wordware started'); // Log after updating the user
+
   // Set up decoder and buffer for processing the stream
   const decoder = new TextDecoder()
   let buffer: string[] = []
@@ -112,17 +118,19 @@ if (!reader) {
   // Create a readable stream to process the response
   const stream = new ReadableStream({
     async start(controller) {
+      console.log('🟢 | Stream started'); // Log when the stream starts
       try {
         while (true) {
           const { done, value } = await reader.read()
 
           if (done) {
+            console.log('🟢 | Stream done reading'); // Log when the stream is done
             controller.close()
             return
           }
 
           const chunk = decoder.decode(value)
-          // console.log('🟣 | file: route.ts:80 | start | chunk:', chunk)
+          console.log('🔵 | Received chunk:', chunk); // Log the entire chunk
 
           // Process the chunk character by character
           for (let i = 0, len = chunk.length; i < len; ++i) {
@@ -134,30 +142,40 @@ if (!reader) {
             }
 
             const line = buffer.join('').trimEnd()
+            console.log('🔵 | Processed line:', line); // Log each processed line
 
             // Parse the JSON content of each line
-            const content = JSON.parse(line)
-            const value = content.value
+            let content;
+            try {
+              content = JSON.parse(line);
+              console.log('🔵 | Parsed content:', content); // Log the parsed content
+            } catch (error) {
+              console.error('❗️ | Error parsing JSON:', error);
+              continue;
+            }
+
+            const value = content.value;
+            console.log('🔵 | Parsed value:', value); // Log the value
 
             // Handle different types of messages in the stream
             if (value.type === 'generation') {
               if (value.state === 'start') {
                 if (value.label === 'output') {
-                  finalOutput = true
+                  finalOutput = true;
                 }
-                // console.log('\nNEW GENERATION -', value.label)
+                console.log('🔵 | New generation started:', value.label);
               } else {
                 if (value.label === 'output') {
-                  finalOutput = false
+                  finalOutput = false;
                 }
-                // console.log('\nEND GENERATION -', value.label)
+                console.log('🔵 | Generation ended:', value.label);
               }
             } else if (value.type === 'chunk') {
               if (finalOutput) {
-                controller.enqueue(value.value ?? '')
+                controller.enqueue(value.value ?? '');
               }
             } else if (value.type === 'outputs') {
-              console.log('✨ Wordware:', value.values.output, '. Now parsing')
+              console.log('✨ Wordware Outputs:', value.values); // Log the entire values object
               try {
                 const statusObject = full
                   ? {
@@ -176,9 +194,9 @@ if (!reader) {
                     },
                   },
                 })
-                // console.log('Analysis saved to database')
+                console.log('🟢 | Analysis saved to database');
               } catch (error) {
-                console.error('Error parsing or saving output:', error)
+                console.error('❗️ | Error parsing or saving output:', error);
 
                 const statusObject = full
                   ? {
@@ -205,6 +223,8 @@ if (!reader) {
       }
     },
   })
+
+  console.log('🟢 | Returning stream response'); // Log before returning the stream
 
   // Return the stream as the response
   return new Response(stream, {
