@@ -3,8 +3,7 @@ import { useParams } from 'next/navigation'
 import { IconType } from 'react-icons'
 import { PiXLogo } from 'react-icons/pi'
 
-import WordwareLogo from '@/components/logo'
-import { Markdown } from '@/components/markdown'
+ import { Markdown } from '@/components/markdown'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -127,23 +126,9 @@ const AnalysisCard: React.FC<AnalysisCardProps> = ({ unlocked, title, icon: Icon
           <CardContent className="flex flex-col text-gray-700">{renderContent()}</CardContent>
         </div>
         <CardFooter className={`flex items-center justify-end space-x-2`}>
-          <a href="https://wordware.ai?utm_source=twitterai">
-            <WordwareLogo
-              emblemOnly
-              color={'black'}
-              width={18}
-            />
-          </a>
+           
 
-          <span className="items-center text-xs">
-            Made with{' '}
-            <a
-              href="https://wordware.ai?utm_source=twitterai"
-              className="font-semibold underline-offset-4 hover:underline">
-              Wordware
-            </a>{' '}
-            - AI superpowers for builders
-          </span>
+         
         </CardFooter>
       </div>
     </Card>
