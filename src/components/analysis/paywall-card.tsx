@@ -20,6 +20,8 @@ const FormSchema = z.object({
   email: z.string().email(),
 })
 
+console.log('Price received in PriceButton:', price);
+
 export const PriceButton = ({ username, price }: { username: string; price: string }) => (
   <Button
     onClick={() => {
