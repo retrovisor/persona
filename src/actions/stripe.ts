@@ -19,6 +19,9 @@ type CheckoutSessionType =
     }
 
 export const createCheckoutSession = async (params: CheckoutSessionType) => {
+
+    console.log('Creating checkout session with:', { username, priceInt, type });
+
   if (params.type === 'user' && !params.username) return { error: 'Username is required' }
   if (params.type === 'pair' && !params.username1 && !params.username2) return { error: 'Usernames are required' }
 
