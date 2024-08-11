@@ -1,8 +1,6 @@
 import { Suspense } from 'react'
 import { PiXLogo } from 'react-icons/pi'
- 
 
-import WordwareLogo from '@/components/logo'
 import NewPairFormBothNames from '@/components/new-pair-form-both-names'
 import NewUsernameForm from '@/components/new-username-form'
  
@@ -15,17 +13,7 @@ const Page = () => {
     <section>
       <div className="flex flex-col md:flex-row">
         <div className="relative flex min-h-screen flex-col justify-center bg-[#F9FAFB] p-8 sm:p-12 md:w-1/2 md:p-16 lg:p-24">
-          <h2 className="flex items-center justify-start gap-4 pb-8">
-            Powered by{' '}
-            <a
-              href="https://wordware.ai/"
-              target="_blank">
-              <WordwareLogo
-                color="black"
-                width={134}
-              />
-            </a>
-          </h2>
+         
           <div className="grow" />
 
           <div>
@@ -76,22 +64,7 @@ const Page = () => {
               </div>
             </div>
 
-            <div className="mb-8 pt-8 text-base 2xl:text-lg">
-              These are AI Agents built with{' '}
-              <a
-                className="font-medium underline-offset-4 hover:underline"
-                target="_blank"
-                href="https://wordware.ai">
-                Wordware
-              </a>
-              , it will:
-              <ul className="mt-2 list-disc space-y-1 pl-8">
-                <li>find Twitter accounts online</li>
-                <li>will read your profile and tweets</li>
-                <li>then it will use Large Language Models - like the ones in ChatGPT - to analyse your personality</li>
-                <li>finally, it&apos;ll create a website with the analysis of your personality or compatibility</li>
-              </ul>
-            </div>
+            
           </div>
           <div className="grow" />
 
