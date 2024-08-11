@@ -42,7 +42,7 @@ export const PaywallCard: React.FC = () => {
     },
   })
 
-  const paywallFlag = posthog.getFeatureFlag('paywall2') ?? searchParams.get('stripe')
+  const paywallFlag = false;
 
   // console.log('paywall flag', paywallFlag, searchParams.get('stripe'))
 
