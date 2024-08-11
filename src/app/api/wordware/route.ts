@@ -77,12 +77,12 @@ export async function POST(request: Request) {
     },
   });
 
-  const decoder = new TextDecoder()
-  let accumulatedOutput = '';
-  let finalOutput = false;
-  const existingAnalysis = user?.analysis as TwitterAnalysis;
-  let updateAttempted = false;
-  let updateSuccessful = false;
+    const decoder = new TextDecoder()
+  let buffer: string[] = []
+  let finalOutput = false
+  const existingAnalysis = user?.analysis as TwitterAnalysis
+  let updateAttempted = false
+  let updateSuccessful = false
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -103,23 +103,28 @@ export async function POST(request: Request) {
 
           const chunk = decoder.decode(value);
           console.log('🟣 Received chunk:', chunk);
-          accumulatedOutput += chunk;
 
-          const lines = accumulatedOutput.split('\n');
-          accumulatedOutput = lines.pop() || '';
+          // Process the chunk character by character
+          for (let i = 0, len = chunk.length; i < len; ++i) {
+            const isChunkSeparator = chunk[i] === '\n'
 
-          for (const line of lines) {
-            if (line.trim() === '') continue;
+            if (!isChunkSeparator) {
+              buffer.push(chunk[i])
+              continue
+            }
+
+            const line = buffer.join('').trimEnd()
+            console.log('🔵 Processed line:', line);
 
             try {
-              const content = JSON.parse(line);
-              const value = content.value;
+              const content = JSON.parse(line)
+              const value = content.value
 
               if (value.type === 'generation') {
                 console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
                 finalOutput = (value.state === 'start' && value.label === 'output');
               } else if (value.type === 'chunk' && finalOutput) {
-                controller.enqueue(value.value ?? '');
+                controller.enqueue(value.value ?? '')
               } else if (value.type === 'outputs') {
                 console.log('✨ Received final output from Wordware:', JSON.stringify(value.values.output));
                 updateAttempted = true;
@@ -160,6 +165,9 @@ export async function POST(request: Request) {
             } catch (error) {
               console.error('❌ Error processing line:', line, error);
             }
+
+            // Reset buffer for the next line
+            buffer = []
           }
         }
       } catch (error) {
@@ -178,3 +186,4 @@ export async function POST(request: Request) {
     headers: { 'Content-Type': 'text/plain' },
   });
 }
+
