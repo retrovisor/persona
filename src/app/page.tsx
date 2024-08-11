@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { PiXLogo } from 'react-icons/pi'
  
 
 import WordwareLogo from '@/components/logo'
