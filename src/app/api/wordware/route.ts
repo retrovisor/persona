@@ -1,6 +1,6 @@
 import { getUser, updateUser } from '@/actions/actions'
 import { TweetType } from '@/actions/types'
-import { TwitterAnalysis } from '@/components/analysis/analysis' 
+import { TwitterAnalysis } from '@/components/analysis/analysis'
 
 export const maxDuration = 300
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
   if (!user) {
     console.log(`❌ User not found: ${username}`);
-    return Response.json({ error: 'User not found' }, { status: 404 });
+    throw Error(`User not found: ${username}`)
   }
 
   if (!full && (user.wordwareCompleted || (user.wordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000))) {
@@ -25,6 +25,15 @@ export async function POST(request: Request) {
   if (full && (user.paidWordwareCompleted || (user.paidWordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000))) {
     console.log(`🟠 Paid Wordware already started or completed for ${username}`);
     return Response.json({ error: 'Wordware already started' })
+  }
+
+  function formatTweet(tweet: TweetType) {
+    const isRetweet = tweet.isRetweet ? 'RT ' : ''
+    const author = tweet.author?.userName ?? username
+    const createdAt = tweet.createdAt
+    const text = tweet.text ?? ''
+    const formattedText = text.split('\n').map((line) => `${line}`).join(`\n> `)
+    return `**${isRetweet}@${author} - ${createdAt}**\n\n> ${formattedText}\n\n*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*`
   }
 
   const tweets = user.tweets as TweetType[]
@@ -51,138 +60,117 @@ export async function POST(request: Request) {
     }),
   });
 
-  if (!runResponse.ok) {
-    const responseBody = await runResponse.text();
-    console.log('🟣 | ERROR | Wordware API Error:', runResponse.status, responseBody);
-    return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
+  const reader = runResponse.body?.getReader()
+  if (!reader || !runResponse.ok) {
+    console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse)
+    return Response.json({ error: 'No reader' }, { status: 400 })
   }
 
-  console.log('🟢 Received successful response from Wordware API');
-
+  console.log('🟢 Updating user to indicate Wordware has started');
   await updateUser({
     user: {
       ...user,
       wordwareStarted: true,
       wordwareStartedTime: new Date(),
     },
-  });
+  })
 
   const decoder = new TextDecoder()
-  let accumulatedOutput = '';
-  let finalAnalysis = {};
-  const existingAnalysis = user?.analysis as TwitterAnalysis;
-  let updateAttempted = false;
-  let updateSuccessful = false;
+  let buffer: string[] = []
+  let finalOutput = false
+  const existingAnalysis = user?.analysis as TwitterAnalysis
 
   const stream = new ReadableStream({
     async start(controller) {
       console.log('🟢 Stream processing started');
-      const timeout = setTimeout(() => {
-        console.log('⚠️ Stream processing timed out');
-        controller.close();
-      }, 290000); // 290 seconds timeout
-
       try {
-        const reader = runResponse.body?.getReader();
-        if (!reader) {
-          throw new Error('No reader available in the response');
-        }
-
         while (true) {
-          const { done, value } = await reader.read();
+          const { done, value } = await reader.read()
 
           if (done) {
-            console.log('🟢 Stream reading completed');
-            break;
+            console.log('🟢 Stream processing completed');
+            controller.close()
+            return
           }
 
-          const chunk = decoder.decode(value);
-          console.log('🟣 Received chunk:', chunk);
-          accumulatedOutput += chunk;
+          const chunk = decoder.decode(value)
 
-          const lines = accumulatedOutput.split('\n');
-          accumulatedOutput = lines.pop() || '';
+          for (let i = 0, len = chunk.length; i < len; ++i) {
+            const isChunkSeparator = chunk[i] === '\n'
 
-          for (const line of lines) {
-            if (line.trim() === '') continue;
+            if (!isChunkSeparator) {
+              buffer.push(chunk[i])
+              continue
+            }
+
+            const line = buffer.join('').trimEnd()
 
             try {
-              const content = JSON.parse(line);
-              const value = content.value;
+              const content = JSON.parse(line)
+              const value = content.value
 
               if (value.type === 'generation') {
-                console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
+                if (value.state === 'start') {
+                  if (value.label === 'output') {
+                    finalOutput = true
+                  }
+                } else {
+                  if (value.label === 'output') {
+                    finalOutput = false
+                  }
+                }
               } else if (value.type === 'chunk') {
-                controller.enqueue(value.value ?? '');
+                if (finalOutput) {
+                  controller.enqueue(value.value ?? '')
+                }
               } else if (value.type === 'outputs') {
-                console.log('✨ Received final output from Wordware:', JSON.stringify(value.values.output));
-                finalAnalysis = value.values.output;
-                updateAttempted = true;
+                console.log('✨ Wordware:', value.values.output, '. Now parsing')
                 try {
                   const statusObject = full
                     ? { paidWordwareStarted: true, paidWordwareCompleted: true }
-                    : { wordwareStarted: true, wordwareCompleted: true };
-                  
-                  console.log('🟠 Attempting to update user in database with analysis');
-                  const updateResult = await updateUser({
+                    : { wordwareStarted: true, wordwareCompleted: true }
+                  await updateUser({
                     user: {
                       ...user,
                       ...statusObject,
                       analysis: {
                         ...existingAnalysis,
-                        ...finalAnalysis,
+                        ...value.values.output,
                       },
                     },
-                  });
-
-                  console.log('🟢 Database update result:', JSON.stringify(updateResult));
-                  updateSuccessful = true;
+                  })
+                  console.log('🟢 Analysis saved to database');
                 } catch (error) {
-                  console.error('❌ Error updating user in database:', error);
-                  updateSuccessful = false;
-                  
+                  console.error('❌ Error updating user in database:', error)
+                  const statusObject = full
+                    ? { paidWordwareStarted: false, paidWordwareCompleted: false }
+                    : { wordwareStarted: false, wordwareCompleted: false }
                   await updateUser({
                     user: {
                       ...user,
-                      ...(full 
-                        ? { paidWordwareStarted: false, paidWordwareCompleted: false }
-                        : { wordwareStarted: false, wordwareCompleted: false }),
+                      ...statusObject,
                     },
-                  });
-                  console.log('🟠 Updated user status to indicate failure');
+                  })
                 }
               }
             } catch (error) {
-              console.error('❌ Error processing line:', line, error);
-              // Enqueue the line even if there's an error, to ensure we don't lose data
-              controller.enqueue(line);
+              console.error('❌ Error processing JSON:', error)
             }
+
+            buffer = []
           }
         }
       } catch (error) {
-        console.error('❌ Error in stream processing:', error);
+        console.error('❌ Error in stream processing:', error)
       } finally {
-        clearTimeout(timeout);
+        reader.releaseLock()
         console.log('🟢 Stream processing finished');
-        console.log('Update attempted:', updateAttempted);
-        console.log('Update successful:', updateSuccessful);
-        console.log('Final analysis:', JSON.stringify(finalAnalysis));
-        controller.close();
       }
     },
-  });
+  })
 
   console.log('🟢 Returning stream response');
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
-  });
-}
-
-function formatTweet(tweet: TweetType) {
-  const isRetweet = tweet.isRetweet ? 'RT ' : ''
-  const author = tweet.author?.userName ?? ''
-  const createdAt = tweet.createdAt
-  const text = tweet.text ?? ''
-  const formattedText = text.split('\n').map((line) => `${line}`).join(`\n> `)
-  return `**${isRetweet}@${author} - ${createdAt}**\n\n> ${formattedText}\n\n*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*`
+  })
 }
