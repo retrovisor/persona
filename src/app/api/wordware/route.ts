@@ -78,7 +78,6 @@ export async function POST(request: Request) {
   });
 
   const decoder = new TextDecoder();
-  let accumulatedOutput = '';
   let buffer = '';
   let finalOutput = false;
   const existingAnalysis = user?.analysis as TwitterAnalysis;
@@ -104,7 +103,6 @@ export async function POST(request: Request) {
 
           const chunk = decoder.decode(value, { stream: true });
           console.log(`🟣 Received chunk: ${chunk}`);
-          accumulatedOutput += chunk;
 
           // Process character by character
           for (let i = 0; i < chunk.length; i++) {
