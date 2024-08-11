@@ -91,135 +91,98 @@ export async function POST(request: Request) {
   let updateSuccessful = false;
 
   const stream = new ReadableStream({
-    async start(controller) {
-      console.log('🟢 Stream processing started');
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
+  async start(controller) {
+    console.log('🟢 Stream processing started');
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
 
-          if (done) {
-            console.log('🟢 Stream processing completed');
-            controller.close()
-            break;
-          }
-
-          const chunk = decoder.decode(value)
-          console.log('🟣 Received chunk:', chunk);
-
-          for (let i = 0, len = chunk.length; i < len; ++i) {
-            const isChunkSeparator = chunk[i] === '\n'
-
-            if (!isChunkSeparator) {
-              buffer.push(chunk[i])
-              continue
-            }
-
-            const line = buffer.join('').trimEnd()
-            console.log('🔵 Processed line:', line);
-
-            try {
-              const content = JSON.parse(line);
-              const value = content.value;
-
-              if (value.type === 'generation') {
-                console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
-                finalOutput = (value.state === 'start' && value.label === 'output');
-              } else if (value.type === 'chunk' && finalOutput) {
-                controller.enqueue(value.value ?? '');
-              } else if (value.type === 'outputs') {
-                console.log('✨ Received final output from Wordware:', JSON.stringify(value.values.output));
-                updateAttempted = true;
-                try {
-                  const statusObject = full
-                    ? { paidWordwareStarted: true, paidWordwareCompleted: true }
-                    : { wordwareStarted: true, wordwareCompleted: true };
-                  
-                  console.log('🟠 Attempting to update user in database with analysis:', JSON.stringify(value.values.output));
-                  const updateResult = await updateUser({
-                    user: {
-                      ...user,
-                      ...statusObject,
-                      analysis: {
-                        ...existingAnalysis,
-                        ...value.values.output,
-                      },
-                    },
-                  });
-
-                  console.log('🟢 Database update result:', JSON.stringify(updateResult));
-                  updateSuccessful = true;
-                } catch (error) {
-                  console.error('❌ Error updating user in database:', error);
-                  updateSuccessful = false;
-                  
-                  await updateUser({
-                    user: {
-                      ...user,
-                      ...(full 
-                        ? { paidWordwareStarted: false, paidWordwareCompleted: false }
-                        : { wordwareStarted: false, wordwareCompleted: false }),
-                    },
-                  });
-                  console.log('🟠 Updated user status to indicate failure');
-                }
-              }
-            } catch (error) {
-              console.error('❌ Error processing line:', error);
-            }
-            buffer = [];
-          }
+        if (done) {
+          console.log('🟢 Stream processing completed');
+          controller.close();
+          break;
         }
-      } catch (error) {
-        console.error('❌ Error in stream processing:', error);
-      } finally {
-        reader.releaseLock()
-        console.log('🟢 Stream processing finished');
-        console.log('Update attempted:', updateAttempted);
-        console.log('Update successful:', updateSuccessful);
+
+        const chunk = decoder.decode(value);
+        console.log('🟣 Received chunk:', chunk);
+
+        for (let i = 0, len = chunk.length; i < len; ++i) {
+          const isChunkSeparator = chunk[i] === '\n';
+
+          if (!isChunkSeparator) {
+            buffer.push(chunk[i]);
+            continue;
+          }
+
+          const line = buffer.join('').trimEnd();
+          console.log('🔵 Processed line:', line);
+
+          try {
+            const content = JSON.parse(line);
+            const value = content.value;
+
+            if (value.type === 'generation') {
+              console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
+              finalOutput = (value.state === 'start' && value.label === 'output');
+            } else if (value.type === 'chunk' && finalOutput) {
+              controller.enqueue(value.value ?? '');
+            } else if (value.type === 'outputs') {
+              console.log('✨ Received final output from Wordware:', JSON.stringify(value.values.output));
+              updateAttempted = true;
+              try {
+                const statusObject = full
+                  ? { paidWordwareStarted: true, paidWordwareCompleted: true }
+                  : { wordwareStarted: true, wordwareCompleted: true };
+                
+                console.log('🟠 Attempting to update user in database with analysis:', JSON.stringify(value.values.output));
+                const updateResult = await updateUser({
+                  user: {
+                    ...user,
+                    ...statusObject,
+                    analysis: {
+                      ...existingAnalysis,
+                      ...value.values.output,
+                    },
+                  },
+                });
+
+                console.log('🟢 Database update result:', JSON.stringify(updateResult));
+                updateSuccessful = true;
+              } catch (error) {
+                console.error('❌ Error updating user in database:', error);
+                updateSuccessful = false;
+                
+                await updateUser({
+                  user: {
+                    ...user,
+                    ...(full 
+                      ? { paidWordwareStarted: false, paidWordwareCompleted: false }
+                      : { wordwareStarted: false, wordwareCompleted: false }),
+                  },
+                });
+                console.log('🟠 Updated user status to indicate failure');
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error processing line:', line, error);
+          }
+          buffer = [];
+        }
       }
-    },
-  });
+    } catch (error) {
+      console.error('❌ Error in stream processing:', error);
+    } finally {
+      reader.releaseLock();
+      console.log('🟢 Stream processing finished');
+      console.log('Update attempted:', updateAttempted);
+      console.log('Update successful:', updateSuccessful);
+    }
+  },
+});
+
 
   console.log('🟢 Returning stream response');
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
   });
-}
-
-export const handleTweetAnalysis = async (props: { username: string; full: boolean; currentAnalysis?: TwitterAnalysis | undefined }) => {
-  console.log('🟢 Starting handleTweetAnalysis for:', props.username);
-  const response = await fetch('/api/wordware', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(props),
-  })
-
-  if (!response.body) {
-    console.error('❌ No response body');
-    return
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let result = ''
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      result += decoder.decode(value, { stream: true })
-      console.log('🟣 Received chunk:', result);
-
-      const parsed = parsePartialJson(result) as TwitterAnalysis
-      console.log('🟢 Parsed analysis:', JSON.stringify(parsed));
-
-      setResult({ ...props.currentAnalysis, ...parsed })
-    }
-  } catch (error) {
-    console.error('❌ Error reading stream', error)
-  } finally {
-    reader.releaseLock()
-    console.log('🟢 Stream reading completed');
-  }
 }
