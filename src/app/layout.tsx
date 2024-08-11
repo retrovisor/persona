@@ -4,8 +4,7 @@ import './globals.css'
 
 import { Analytics } from '@vercel/analytics/react'
 
-import Callout from '@/components/callout'
-import { DeveloperInfo } from '@/components/developer-info'
+ import { DeveloperInfo } from '@/components/developer-info'
 import Footer from '@/components/footer'
 import { NewsletterForm } from '@/components/newsletter-form'
 import { getURL } from '@/lib/config'
@@ -76,11 +75,7 @@ export default function RootLayout({
             {/* Main content area */}
             {children}
 
-            {/* Callout section */}
-            <section className="w-full">
-              <Callout />
-            </section>
-
+             
             {/* Newsletter form section */}
             <section className="pb-24">
               <NewsletterForm />
