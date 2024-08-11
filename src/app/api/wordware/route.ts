@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
   if (!user) {
     console.log(`❌ User not found: ${username}`);
-    throw Error(`User not found: ${username}`)
+    return Response.json({ error: 'User not found' }, { status: 404 });
   }
 
   if (!full && (user.wordwareCompleted || (user.wordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000))) {
@@ -25,15 +25,6 @@ export async function POST(request: Request) {
   if (full && (user.paidWordwareCompleted || (user.paidWordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000))) {
     console.log(`🟠 Paid Wordware already started or completed for ${username}`);
     return Response.json({ error: 'Wordware already started' })
-  }
-
-  function formatTweet(tweet: TweetType) {
-    const isRetweet = tweet.isRetweet ? 'RT ' : ''
-    const author = tweet.author?.userName ?? username
-    const createdAt = tweet.createdAt
-    const text = tweet.text ?? ''
-    const formattedText = text.split('\n').map((line) => `${line}`).join(`\n> `)
-    return `**${isRetweet}@${author} - ${createdAt}**\n\n> ${formattedText}\n\n*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*`
   }
 
   const tweets = user.tweets as TweetType[]
@@ -68,7 +59,6 @@ export async function POST(request: Request) {
 
   console.log('🟢 Received successful response from Wordware API');
 
-  console.log('🟢 Updating user to indicate Wordware has started');
   await updateUser({
     user: {
       ...user,
@@ -79,7 +69,7 @@ export async function POST(request: Request) {
 
   const decoder = new TextDecoder()
   let accumulatedOutput = '';
-  let finalOutput = false;
+  let finalAnalysis = {};
   const existingAnalysis = user?.analysis as TwitterAnalysis;
   let updateAttempted = false;
   let updateSuccessful = false;
@@ -87,6 +77,11 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       console.log('🟢 Stream processing started');
+      const timeout = setTimeout(() => {
+        console.log('⚠️ Stream processing timed out');
+        controller.close();
+      }, 290000); // 290 seconds timeout
+
       try {
         const reader = runResponse.body?.getReader();
         if (!reader) {
@@ -117,11 +112,11 @@ export async function POST(request: Request) {
 
               if (value.type === 'generation') {
                 console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
-                finalOutput = (value.state === 'start' && value.label === 'output');
-              } else if (value.type === 'chunk' && finalOutput) {
+              } else if (value.type === 'chunk') {
                 controller.enqueue(value.value ?? '');
               } else if (value.type === 'outputs') {
                 console.log('✨ Received final output from Wordware:', JSON.stringify(value.values.output));
+                finalAnalysis = value.values.output;
                 updateAttempted = true;
                 try {
                   const statusObject = full
@@ -135,7 +130,7 @@ export async function POST(request: Request) {
                       ...statusObject,
                       analysis: {
                         ...existingAnalysis,
-                        ...value.values.output,
+                        ...finalAnalysis,
                       },
                     },
                   });
@@ -159,15 +154,19 @@ export async function POST(request: Request) {
               }
             } catch (error) {
               console.error('❌ Error processing line:', line, error);
+              // Enqueue the line even if there's an error, to ensure we don't lose data
+              controller.enqueue(line);
             }
           }
         }
       } catch (error) {
         console.error('❌ Error in stream processing:', error);
       } finally {
+        clearTimeout(timeout);
         console.log('🟢 Stream processing finished');
         console.log('Update attempted:', updateAttempted);
         console.log('Update successful:', updateSuccessful);
+        console.log('Final analysis:', JSON.stringify(finalAnalysis));
         controller.close();
       }
     },
@@ -177,4 +176,13 @@ export async function POST(request: Request) {
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
   });
+}
+
+function formatTweet(tweet: TweetType) {
+  const isRetweet = tweet.isRetweet ? 'RT ' : ''
+  const author = tweet.author?.userName ?? ''
+  const createdAt = tweet.createdAt
+  const text = tweet.text ?? ''
+  const formattedText = text.split('\n').map((line) => `${line}`).join(`\n> `)
+  return `**${isRetweet}@${author} - ${createdAt}**\n\n> ${formattedText}\n\n*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*`
 }
