@@ -19,38 +19,39 @@ type CheckoutSessionType =
     }
 
 export const createCheckoutSession = async (params: CheckoutSessionType) => {
+  // Log the parameters to ensure everything is defined correctly
+  console.log('Creating checkout session with:', { username: params.username, priceInt: params.priceInt, type: params.type });
 
-    console.log('Creating checkout session with:', { username, priceInt, type });
+  if (params.type === 'user' && !params.username) return { error: 'Username is required' };
+  if (params.type === 'pair' && !params.username1 && !params.username2) return { error: 'Usernames are required' };
 
-  if (params.type === 'user' && !params.username) return { error: 'Username is required' }
-  if (params.type === 'pair' && !params.username1 && !params.username2) return { error: 'Usernames are required' }
-
-  let metadataObject: Record<string, string> = {}
-  let successUrl = ''
-  let cancelUrl = ''
+  let metadataObject: Record<string, string> = {};
+  let successUrl = '';
+  let cancelUrl = '';
 
   if (params.type === 'user') {
     metadataObject = {
       username: params.username.replace('/', ''),
       type: params.type,
-    }
-    successUrl = `${getURL()}${params.username}?success=true`
-    cancelUrl = `${getURL()}${params.username}?error=cancel`
+    };
+    successUrl = `${getURL()}${params.username}?success=true`;
+    cancelUrl = `${getURL()}${params.username}?error=cancel`;
   }
+
   if (params.type === 'pair') {
-    const [username1, username2] = [params.username1, params.username2].sort()
+    const [username1, username2] = [params.username1, params.username2].sort();
     metadataObject = {
       username1: username1.replace('/', ''),
       username2: username2.replace('/', ''),
       type: params.type,
-    }
-    successUrl = `${getURL()}${username1}/${username2}/?success=true`
-    cancelUrl = `${getURL()}${username1}/${username2}/?error=cancel`
+    };
+    successUrl = `${getURL()}${username1}/${username2}/?success=true`;
+    cancelUrl = `${getURL()}${username1}/${username2}/?error=cancel`;
   }
 
   const sessionConfig = {
-    payment_method_types: ['card' as const],
-    billing_address_collection: 'required' as const,
+    payment_method_types: ['card'],
+    billing_address_collection: 'required',
     line_items: [
       {
         price_data: {
@@ -64,15 +65,16 @@ export const createCheckoutSession = async (params: CheckoutSessionType) => {
     payment_intent_data: {
       metadata: metadataObject,
     },
-    allow_promotion_codes: undefined as boolean | undefined,
+    allow_promotion_codes: undefined,
     metadata: metadataObject,
-    mode: 'payment' as const,
+    mode: 'payment',
     success_url: successUrl,
     cancel_url: cancelUrl,
-  }
+  };
 
-  const session = await stripe.checkout.sessions.create(sessionConfig)
+  const session = await stripe.checkout.sessions.create(sessionConfig);
 
-  if (session.url) redirect(session.url)
-  return { error: 'No session url' }
-}
+  if (session.url) redirect(session.url);
+  return { error: 'No session url' };
+};
+
