@@ -14,7 +14,7 @@ export const maxDuration = 300
  */
 export async function POST(request: Request) {
   console.log('🟢 Starting POST request for Wordware API');
-  
+
   // Extract username from the request body
   const { username, full } = await request.json()
   console.log(`🟢 Processing request for username: ${username}, full: ${full}`);
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
   }
 
   function formatTweet(tweet: TweetType) {
+    // console.log('Formatting', tweet)
     const isRetweet = tweet.isRetweet ? 'RT ' : ''
     const author = tweet.author?.userName ?? username
     const createdAt = tweet.createdAt
@@ -75,29 +76,21 @@ export async function POST(request: Request) {
     },
     body: JSON.stringify({
       inputs: {
-        Tweets: tweetsMarkdown, // Note the capital 'T' and no "Tweets:" prefix
+        tweets: `Tweets: ${tweetsMarkdown}`,
         profilePicture: user.profilePicture,
         profileInfo: user.fullProfile,
-        version: '^2.0',
+        version: '^1.0',
       },
     }),
-  });
+  })
 
-  // Log the response status and body
-  if (!runResponse.ok) {
-    const responseBody = await runResponse.text();  // Read the response body
-    console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse);
-    console.log('🟣 | Response Body:', responseBody);  // Log the response body
-    return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
+  // Get the reader from the response body
+  const reader = runResponse.body?.getReader()
+  if (!reader || !runResponse.ok) {
+    console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse)
+    return Response.json({ error: 'No reader' }, { status: 400 })
   }
   console.log('🟢 Received successful response from Wordware API');
-
-  // Proceed if the response is okay
-  const reader = runResponse.body?.getReader();
-  if (!reader) {
-    console.log('❗️ | No reader available in the response');
-    return Response.json({ error: 'No reader' }, { status: 400 });
-  }
 
   console.log('🟢 Updating user to indicate Wordware has started');
   // Update user to indicate Wordware has started
@@ -114,8 +107,6 @@ export async function POST(request: Request) {
   let buffer: string[] = []
   let finalOutput = false
   const existingAnalysis = user?.analysis as TwitterAnalysis
-  let updateAttempted = false;
-  let updateSuccessful = false;
 
   // Create a readable stream to process the response
   console.log('🟢 Starting to process the stream');
@@ -134,10 +125,16 @@ export async function POST(request: Request) {
           const chunk = decoder.decode(value)
           // console.log('🟣 | file: route.ts:80 | start | chunk:', chunk)
 
-          // Process the chunk line by line
-          const lines = chunk.split('\n')
-          for (const line of lines) {
-            if (line.trim() === '') continue
+          // Process the chunk character by character
+          for (let i = 0, len = chunk.length; i < len; ++i) {
+            const isChunkSeparator = chunk[i] === '\n'
+
+            if (!isChunkSeparator) {
+              buffer.push(chunk[i])
+              continue
+            }
+
+            const line = buffer.join('').trimEnd()
 
             // Parse the JSON content of each line
             const content = JSON.parse(line)
@@ -163,13 +160,9 @@ export async function POST(request: Request) {
               }
             } else if (value.type === 'outputs') {
               console.log('✨ Received final output from Wordware. Now parsing');
-              updateAttempted = true;
               try {
                 const statusObject = full
-                  ? {
-                      paidWordwareStarted: true,
-                      paidWordwareCompleted: true,
-                    }
+                  ? { paidWordwareStarted: true, paidWordwareCompleted: true }
                   : { wordwareStarted: true, wordwareCompleted: true }
                 // Update user with the analysis from Wordware
                 console.log('🟠 Attempting to update user in database');
@@ -183,17 +176,12 @@ export async function POST(request: Request) {
                     },
                   },
                 })
-                updateSuccessful = true;
                 console.log('🟢 Successfully updated user in database');
               } catch (error) {
                 console.error('❌ Error updating user in database:', error)
-                updateSuccessful = false;
 
                 const statusObject = full
-                  ? {
-                      paidWordwareStarted: false,
-                      paidWordwareCompleted: false,
-                    }
+                  ? { paidWordwareStarted: false, paidWordwareCompleted: false }
                   : { wordwareStarted: false, wordwareCompleted: false }
                 await updateUser({
                   user: {
@@ -204,13 +192,15 @@ export async function POST(request: Request) {
                 console.log('🟠 Updated user status to indicate failure');
               }
             }
+
+            // Reset buffer for the next line
+            buffer = []
           }
         }
       } finally {
         // Ensure the reader is released when done
         reader.releaseLock()
         console.log('🟢 Stream processing finished');
-        console.log(`🟢 Update attempted: ${updateAttempted}, Update successful: ${updateSuccessful}`);
       }
     },
   })
