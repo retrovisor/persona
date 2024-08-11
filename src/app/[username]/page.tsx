@@ -9,7 +9,7 @@ import NewUsernameForm from '@/components/new-username-form'
 import { ProfileHighlight } from '../../components/analysis/profile-highlight'
 // import PHPopup from './ph-popup'
 import ResultComponent from '../../components/analysis/result-component'
-import Topbar from '../../components/top-bar'
+ 
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -23,7 +23,8 @@ const Page = async ({ params }: { params: { username: string } }) => {
 
   return (
     <div className="flex-center relative min-h-screen w-full flex-col gap-12 bg-[#F9FAFB] px-4 py-28 sm:px-12 md:px-28 md:pt-24">
-      <Topbar />
+      
+      
       <div className="flex-center flex-col gap-6">
         <div className="text-center text-xl font-light">
           Here&apos;s the <span className="font-medium">AI agent</span> analysis of your personality...
