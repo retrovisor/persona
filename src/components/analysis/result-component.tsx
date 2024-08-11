@@ -17,7 +17,7 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
   const searchParams = useSearchParams();
 
   // Remove PostHog and handle the paywallFlag similarly to PaywallCard
-  const paywallFlag = searchParams.get('stripe') ?? '1000'; // Default price in cents ($10.00)
+  const paywallFlag = searchParams.get('stripe') ?? '100'; // Default price in cents ($10.00)
   console.log('Final paywallFlag value in ResultComponent:', paywallFlag);
 
   const prepareUserData = useCallback((result: TwitterAnalysis | undefined, unlocked: boolean): TwitterAnalysis | undefined => {
