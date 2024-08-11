@@ -10,7 +10,6 @@ import { useTwitterAnalysis } from '@/hooks/twitter-analysis'
 import { analysisPlaceholder } from '@/lib/constants'
 
 import NewPairForm from '../new-pair-form'
-import ActionButtons from './action-buttons'
 import { Analysis, TwitterAnalysis } from './analysis'
 import { ProgressIndicator, StepIndicator } from './progress-indicator'
 
@@ -49,11 +48,7 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
           price={paywallFlag as string}
         />
       )}
-      <ActionButtons
-        shareActive={!!result?.about}
-        text={`this is my Twitter Personality analysis by AI Agent, built on @wordware_ai`}
-        url={`https://twitter.wordware.ai/${user.username}`}
-      />
+       
 
       <div className="flex-center w-full flex-col gap-4">
         <div className="text-center text-lg font-light">Add new user to find if you are compatible souls</div>
