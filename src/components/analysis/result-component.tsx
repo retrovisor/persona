@@ -4,10 +4,8 @@ import { useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import posthog from 'posthog-js'
 
- 
 import { SelectUser } from '@/drizzle/schema'
 import { useTwitterAnalysis } from '@/hooks/twitter-analysis'
-import { analysisPlaceholder } from '@/lib/constants'
 
 import NewPairForm from '../new-pair-form'
 import ActionButtons from './action-buttons'
@@ -18,22 +16,9 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
   const { steps, result } = useTwitterAnalysis(user)
   const searchParams = useSearchParams()
 
- 
   const prepareUserData = useCallback((result: TwitterAnalysis | undefined): TwitterAnalysis | undefined => {
-  if (!result) return undefined
-  return result
-}, [])
-
-
-
-    // Merge placeholders with the result if not unlocked
-    return {
-      ...result,
-      ...analysisPlaceholder,
-      strengths: analysisPlaceholder.strengths,
-      weaknesses: analysisPlaceholder.weaknesses,
-      pickupLines: analysisPlaceholder.pickupLines,
-    }
+    if (!result) return undefined
+    return result
   }, [])
 
   return (
@@ -41,9 +26,8 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
       <ProgressIndicator
         steps={steps}
         result={result}
-        userUnlocked={user.unlocked || false}
+        userUnlocked={true}
       />
-       
       <ActionButtons
         shareActive={!!result?.about}
         text={`this is my Twitter Personality analysis by AI Agent, built on @wordware_ai`}
@@ -64,11 +48,11 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
         )}
       </div>
 
-     <Analysis
-  unlocked={true}
-  userData={prepareUserData(result)}
-/>
-      {!result?.loveLife && user.unlocked && (
+      <Analysis
+        unlocked={true}
+        userData={prepareUserData(result)}
+      />
+      {!result?.loveLife && (
         <StepIndicator
           started={steps.paidWordwareStarted}
           completed={steps.paidWordwareCompleted}
