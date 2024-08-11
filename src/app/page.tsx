@@ -6,8 +6,7 @@ import Quote from '@/app/quote'
 import WordwareLogo from '@/components/logo'
 import NewPairFormBothNames from '@/components/new-pair-form-both-names'
 import NewUsernameForm from '@/components/new-username-form'
-import PHButton from '@/components/ph-button'
-import { Button } from '@/components/ui/button'
+ import { Button } from '@/components/ui/button'
 
 import TopList from './top-list'
 
@@ -101,35 +100,11 @@ const Page = () => {
           <div className="bottom-6 space-y-3 border-t">
             <div className="flex flex-col gap-2">
               <p className="mt-8 text-sm">
-                <span
-                  className="bg-clip-text font-bold text-transparent"
-                  style={{ backgroundColor: '#CB9F9F' }}>
-                  support the Wordware launch!
-                </span>
+                 
               </p>
               <div className="flex flex-wrap gap-2">
-                <PHButton />
-                <Button
-                  variant={'outline'}
-                  asChild>
-                  <a
-                    href="https://github.com/wordware-ai/twitter"
-                    target="_blank"
-                    className="flex-center gap-2">
-                    <PiGithubLogo />
-                    GitHub Repo
-                  </a>
-                </Button>
-                <Button
-                  asChild
-                  variant={'outline'}>
-                  <Link
-                    href="/open"
-                    className="flex items-center gap-2">
-                    <PiBrain />
-                    Stats
-                  </Link>
-                </Button>
+                 
+                
               </div>
             </div>
           </div>
