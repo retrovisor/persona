@@ -55,10 +55,10 @@ const Analysis: React.FC<AnalysisProps> = ({ unlocked, userData }) => {
             {index === 1 && <WordwareCard />}
             {index === 7 && <WordwareCard />}
             <AnalysisCard
-              {...card}
-              content={userData?.[card.contentKey] || ''}
-              unlocked={unlocked}
-            />
+  {...card}
+  content={userData?.[card.contentKey] || ''}
+  unlocked={true}
+/>
           </React.Fragment>
         ))}
       </div>
