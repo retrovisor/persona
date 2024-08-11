@@ -70,7 +70,7 @@ const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${prom
       tweets: `Tweets: ${tweetsMarkdown}`,
       profilePicture: user.profilePicture,
       profileInfo: user.fullProfile,
-      version: '^1.0',
+      version: '^2.0',
     },
   }),
 });
