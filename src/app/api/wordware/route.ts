@@ -67,7 +67,7 @@ const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${prom
   },
   body: JSON.stringify({
     inputs: {
-      tweets: `Tweets: ${tweetsMarkdown}`,
+      Tweets: tweetsMarkdown, // Note the capital 'T' and no "Tweets:" prefix
       profilePicture: user.profilePicture,
       profileInfo: user.fullProfile,
       version: '^2.0',
