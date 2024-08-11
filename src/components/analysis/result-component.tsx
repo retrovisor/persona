@@ -24,7 +24,9 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
     if (!result) return undefined
     if (!result.roast) return result
 
-    if (unlocked) return result
+    return result
+
+
 
     // Merge placeholders with the result if not unlocked
     return {
@@ -43,12 +45,7 @@ const ResultComponent = ({ user }: { user: SelectUser }) => {
         result={result}
         userUnlocked={user.unlocked || false}
       />
-      {!user.unlocked && (
-        <PriceButton
-          username={user.username}
-          price={paywallFlag as string}
-        />
-      )}
+       
       <ActionButtons
         shareActive={!!result?.about}
         text={`this is my Twitter Personality analysis by AI Agent, built on @wordware_ai`}
