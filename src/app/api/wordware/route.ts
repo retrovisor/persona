@@ -100,63 +100,62 @@ export async function POST(request: Request) {
   const existingAnalysis = user?.analysis as TwitterAnalysis
 
   // Create a readable stream to process the response
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
+const stream = new ReadableStream({
+  async start(controller) {
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
 
-          if (done) {
-            controller.close()
-            return
+        if (done) {
+          console.log('🟢 Stream processing completed');
+          controller.close()
+          return
+        }
+
+        const chunk = decoder.decode(value)
+        console.log('🟣 Received chunk:', chunk)
+
+        // Process the chunk character by character
+        for (let i = 0, len = chunk.length; i < len; ++i) {
+          const isChunkSeparator = chunk[i] === '\n'
+
+          if (!isChunkSeparator) {
+            buffer.push(chunk[i])
+            continue
           }
 
-          const chunk = decoder.decode(value)
-          // console.log('🟣 | file: route.ts:80 | start | chunk:', chunk)
+          const line = buffer.join('').trimEnd()
+          console.log('🔵 Processed line:', line)
 
-          // Process the chunk character by character
-          for (let i = 0, len = chunk.length; i < len; ++i) {
-            const isChunkSeparator = chunk[i] === '\n'
-
-            if (!isChunkSeparator) {
-              buffer.push(chunk[i])
-              continue
-            }
-
-            const line = buffer.join('').trimEnd()
-
+          try {
             // Parse the JSON content of each line
             const content = JSON.parse(line)
             const value = content.value
 
             // Handle different types of messages in the stream
             if (value.type === 'generation') {
+              console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
               if (value.state === 'start') {
                 if (value.label === 'output') {
                   finalOutput = true
                 }
-                // console.log('\nNEW GENERATION -', value.label)
               } else {
                 if (value.label === 'output') {
                   finalOutput = false
                 }
-                // console.log('\nEND GENERATION -', value.label)
               }
             } else if (value.type === 'chunk') {
               if (finalOutput) {
                 controller.enqueue(value.value ?? '')
               }
             } else if (value.type === 'outputs') {
-              console.log('✨ Wordware:', value.values.output, '. Now parsing')
+              console.log('✨ Wordware output:', JSON.stringify(value.values.output))
               try {
                 const statusObject = full
-                  ? {
-                      paidWordwareStarted: true,
-                      paidWordwareCompleted: true,
-                    }
+                  ? { paidWordwareStarted: true, paidWordwareCompleted: true }
                   : { wordwareStarted: true, wordwareCompleted: true }
                 // Update user with the analysis from Wordware
-                await updateUser({
+                const updateResult = await updateUser({
                   user: {
                     ...user,
                     ...statusObject,
@@ -166,15 +165,11 @@ export async function POST(request: Request) {
                     },
                   },
                 })
-                // console.log('Analysis saved to database')
+                console.log('🟢 Analysis saved to database:', JSON.stringify(updateResult))
               } catch (error) {
-                console.error('Error parsing or saving output:', error)
-
+                console.error('❌ Error parsing or saving output:', error)
                 const statusObject = full
-                  ? {
-                      paidWordwareStarted: false,
-                      paidWordwareCompleted: false,
-                    }
+                  ? { paidWordwareStarted: false, paidWordwareCompleted: false }
                   : { wordwareStarted: false, wordwareCompleted: false }
                 await updateUser({
                   user: {
@@ -184,17 +179,23 @@ export async function POST(request: Request) {
                 })
               }
             }
-
-            // Reset buffer for the next line
-            buffer = []
+          } catch (error) {
+            console.error('❌ Error processing line:', error, 'Line:', line)
           }
+
+          // Reset buffer for the next line
+          buffer = []
         }
-      } finally {
-        // Ensure the reader is released when done
-        reader.releaseLock()
       }
-    },
-  })
+    } catch (error) {
+      console.error('❌ Error in stream processing:', error)
+    } finally {
+      // Ensure the reader is released when done
+      reader.releaseLock()
+    }
+  },
+})
+
 
   // Return the stream as the response
   return new Response(stream, {
