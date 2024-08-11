@@ -3,14 +3,14 @@ import { PiXLogo } from 'react-icons/pi'
 
 import NewPairFormBothNames from '@/components/new-pair-form-both-names'
 import NewUsernameForm from '@/components/new-username-form'
- 
+
 import TopList from './top-list'
 
 export const maxDuration = 181
 
 const Page = () => {
   return (
-    <section className="flex justify-center items-center min-h-screen">
+    <section className="flex flex-col justify-center items-center min-h-screen">
       <div className="flex flex-col md:flex-row max-w-4xl w-full">
         <div className="relative flex flex-col justify-center bg-[#F9FAFB] p-8 sm:p-12 md:p-16 lg:p-24 w-full">
           <div className="grow" />
