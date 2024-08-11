@@ -1,75 +1,69 @@
-import React from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { LockIcon } from 'lucide-react'
-import posthog from 'posthog-js'
-import { useForm } from 'react-hook-form'
-import { toast } from 'sonner'
-import { z } from 'zod'
+import React from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { LockIcon } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
+import { z } from 'zod';
 
-import { unlockGeneration } from '@/actions/actions'
-import { createCheckoutSession } from '@/actions/stripe'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { PERSONALITY_PART1_PAYWALL } from '@/lib/config'
-import { cn } from '@/lib/utils'
+import { unlockGeneration } from '@/actions/actions';
+import { createCheckoutSession } from '@/actions/stripe';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { PERSONALITY_PART1_PAYWALL } from '@/lib/config';
+import { cn } from '@/lib/utils';
 
 const FormSchema = z.object({
   email: z.string().email(),
-})
-
-
+});
 
 export const PriceButton = ({ username, price }: { username: string; price: string }) => (
   console.log('Price received in PriceButton:', price),
   <Button
     onClick={() => {
-      createCheckoutSession({ username, priceInt: parseInt(price), type: 'user' })
+      createCheckoutSession({ username, priceInt: parseInt(price), type: 'user' });
     }}
     className={cn('w-full bg-green-600 hover:bg-green-700', !PERSONALITY_PART1_PAYWALL && 'max-w-md')}
     type="button">
     Unlock Full Analysis (${parseInt(price) / 100})
   </Button>
-)
+);
 
 export const PaywallCard: React.FC = () => {
-  const searchParams = useSearchParams()
-  const pathname = usePathname()
-  const router = useRouter()
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       email: '',
     },
-  })
+  });
 
-  const paywallFlag = posthog.getFeatureFlag('paywall2') ?? searchParams.get('stripe')
-console.log('Feature flag value:', posthog.getFeatureFlag('paywall2'));
-console.log('Stripe query parameter:', searchParams.get('stripe'));
-console.log('Final paywallFlag value:', paywallFlag);
-
-   console.log('paywall flag', paywallFlag, searchParams.get('stripe'))
+  // Remove PostHog and use a static price or another logic
+  const paywallFlag = searchParams.get('stripe') ?? '1000'; // Default price in cents ($10.00)
+  console.log('Final paywallFlag value:', paywallFlag);
 
   async function onSubmit(values: z.infer<typeof FormSchema>) {
     // Attempt to create a contact in Loops
-    const { success } = await unlockGeneration({ username: pathname, email: values.email })
+    const { success } = await unlockGeneration({ username: pathname, email: values.email });
     if (!success) {
-      toast.error('Something went wrong')
+      toast.error('Something went wrong');
     } else {
-      toast.success('You have been added to the newsletter.')
-      const newUrl = new URL(pathname, window.location.origin)
-      newUrl.searchParams.set('success', 'true')
-      router.replace(newUrl.toString())
-      router.refresh()
+      toast.success('You have been added to the newsletter.');
+      const newUrl = new URL(pathname, window.location.origin);
+      newUrl.searchParams.set('success', 'true');
+      router.replace(newUrl.toString());
+      router.refresh();
     }
   }
 
   if (typeof window !== 'undefined' && searchParams.has('success')) {
-    console.log('Conversion successful')
-    posthog.capture('conversion')
+    console.log('Conversion successful');
   }
+
   return (
     <Card className={cn(`relative w-full overflow-hidden rounded-2xl border bg-blue-600 bg-opacity-5 px-4 pb-4`)}>
       <CardHeader className="flex w-full flex-col items-start">
@@ -140,5 +134,5 @@ console.log('Final paywallFlag value:', paywallFlag);
         )}
       </CardContent>
     </Card>
-  )
-}
+  );
+};
