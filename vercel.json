@@ -4,7 +4,7 @@
       "memory": 256
     },
     "app/api/wordware/**.js": {
-      "memory": 256
+      "memory": 512
     }
   }
 }
