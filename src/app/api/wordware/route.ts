@@ -59,30 +59,37 @@ export async function POST(request: Request) {
   const promptID = full ? process.env.WORDWARE_FULL_PROMPT_ID : process.env.WORDWARE_ROAST_PROMPT_ID
 
   // Make a request to the Wordware API
-  const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
+const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
+  },
+  body: JSON.stringify({
+    inputs: {
+      tweets: `Tweets: ${tweetsMarkdown}`,
+      profilePicture: user.profilePicture,
+      profileInfo: user.fullProfile,
+      version: '^1.0',
     },
-    body: JSON.stringify({
-      inputs: {
-        tweets: `Tweets: ${tweetsMarkdown}`,
-        profilePicture: user.profilePicture,
-        profileInfo: user.fullProfile,
-        version: '^1.0',
-      },
-    }),
-  })
+  }),
+});
 
-  // console.log('🟣 | file: route.ts:40 | POST | runResponse:', runResponse)
-  // Get the reader from the response body
-  const reader = runResponse.body?.getReader()
-  if (!reader || !runResponse.ok) {
-    // console.error('No reader')
-    console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse)
-    return Response.json({ error: 'No reader' }, { status: 400 })
-  }
+// Log the response status and body
+if (!runResponse.ok) {
+  const responseBody = await runResponse.text();  // Read the response body
+  console.log('🟣 | ERROR | file: route.ts:40 | POST | runResponse:', runResponse);
+  console.log('🟣 | Response Body:', responseBody);  // Log the response body
+  return Response.json({ error: 'Wordware API returned an error', details: responseBody }, { status: 400 });
+}
+
+// Proceed if the response is okay
+const reader = runResponse.body?.getReader();
+if (!reader) {
+  console.log('❗️ | No reader available in the response');
+  return Response.json({ error: 'No reader' }, { status: 400 });
+}
+
 
   // Update user to indicate Wordware has started
   await updateUser({
