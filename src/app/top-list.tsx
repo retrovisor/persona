@@ -97,8 +97,7 @@ const TopList = async () => {
       {/* Display grid of featured users */}
       <UserGrid
         users={featured}
-        title="AI Agents Luminaries"
-      />
+       />
     </div>
   )
 }
