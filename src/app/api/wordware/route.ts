@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         tweets: `Tweets: ${tweetsMarkdown}`,
         profilePicture: user.profilePicture,
         profileInfo: user.fullProfile,
-        version: '^3.0',
+        version: '^1.1',
       },
     }),
   });
