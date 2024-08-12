@@ -160,120 +160,129 @@ export async function POST(request: Request) {
   const abortController = new AbortController()
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
 
+  async function POST(request: Request) {
+  // ... [code before stream processing]
+
   const stream = new ReadableStream({
     async start(controller) {
-      console.log('🟢 Stream processing started')
-      let lastProcessedValue = null
-      const INACTIVITY_TIMEOUT = 10000 // 10 seconds of inactivity to consider stream complete
+      console.log('🟢 Stream processing started');
+      let lastProcessedValue = null;
+      const INACTIVITY_TIMEOUT = 10000; // 10 seconds of inactivity to consider stream complete
+      let finalOutput = false;
+      const FORCE_FINAL_OUTPUT_AFTER = 50; // Force finalOutput after this many chunks if not set
 
       const checkInactivity = setInterval(async () => {
         if (Date.now() - lastChunkTime > INACTIVITY_TIMEOUT && lastProcessedValue) {
-          console.log('🔵 Inactivity timeout reached. Saving final analysis.')
-          clearInterval(checkInactivity)
-          await saveAnalysisAndUpdateUser(user, lastProcessedValue, full)
-          controller.close()
+          console.log('🔵 Inactivity timeout reached. Saving final analysis.');
+          clearInterval(checkInactivity);
+          await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
+          controller.close();
         }
-      }, 1000)
+      }, 1000);
 
       try {
         while (true) {
           if (abortController.signal.aborted) {
-            throw new Error('Stream processing timed out')
+            throw new Error('Stream processing timed out');
           }
 
-          const { done, value } = await reader.read()
+          const { done, value } = await reader.read();
 
           if (done) {
-            console.log('🟢 Stream reading completed')
-            clearInterval(checkInactivity)
+            console.log('🟢 Stream reading completed');
+            clearInterval(checkInactivity);
             if (lastProcessedValue) {
-              console.log('🔄 Attempting to save analysis at the end of stream.')
-              await saveAnalysisAndUpdateUser(user, lastProcessedValue, full)
+              console.log('🔄 Attempting to save analysis at the end of stream.');
+              await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
             }
-            controller.close()
-            return
+            controller.close();
+            return;
           }
 
-          const chunk = decoder.decode(value)
-          chunkCount++
-          const now = Date.now()
-          console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`)
-          lastChunkTime = now
+          const chunk = decoder.decode(value);
+          chunkCount++;
+          const now = Date.now();
+          console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`);
+          lastChunkTime = now;
 
           // Log entire chunk content for first 5 chunks
           if (chunkCount <= 5) {
-            console.log(`🔍 Full chunk content: ${chunk}`)
+            console.log(`🔍 Full chunk content: ${chunk}`);
           }
 
           if (chunkCount % 10 === 0) {
-            console.log(`🟠 Buffer size: ${buffer.join('').length} characters`)
-            logMemoryUsage()
+            console.log(`🟠 Buffer size: ${buffer.join('').length} characters`);
+            logMemoryUsage();
           }
 
           for (let i = 0, len = chunk.length; i < len; ++i) {
-            const isChunkSeparator = chunk[i] === '\n'
+            const isChunkSeparator = chunk[i] === '\n';
 
             if (!isChunkSeparator) {
-              buffer.push(chunk[i])
-              continue
+              buffer.push(chunk[i]);
+              continue;
             }
 
-            const line = buffer.join('').trimEnd()
+            const line = buffer.join('').trimEnd();
 
             try {
-              const content = JSON.parse(line)
-              const value = content.value
+              const content = JSON.parse(line);
+              const value = content.value;
 
               if (value.type === 'generation') {
-                console.log(`🔵 Generation event: ${value.state} - ${value.label}`)
-                generationEventCount++
-                if (value.state === 'start') {
-                  if (value.label === 'output') {
-                    finalOutput = true
-                    console.log('🔵 finalOutput set to true')
-                  }
-                } else {
-                  if (value.label === 'output') {
-                    finalOutput = false
-                    console.log('🔵 finalOutput set to false')
-                  }
+                console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
+                generationEventCount++;
+                if (value.state === 'start' && value.label === 'output') {
+                  finalOutput = true;
+                  console.log('🔵 finalOutput set to true due to generation start event');
+                }
+                if (value.state === 'end' && value.label === 'output') {
+                  finalOutput = false;
+                  console.log('🔵 finalOutput set to false due to generation end event');
                 }
               } else if (value.type === 'chunk') {
-                controller.enqueue(value.value ?? '')
-                console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`)
+                controller.enqueue(value.value ?? '');
+                console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`);
               } else if (value.type === 'outputs') {
-                console.log('✨ Received final output from Wordware. Now parsing')
-                lastProcessedValue = value
-                // We don't save immediately here, we wait for inactivity or stream end
+                console.log('✨ Received final output from Wordware. Now parsing');
+                lastProcessedValue = value;
+                finalOutput = true; // Final output received, flag should be set
               }
 
               // Force finalOutput if necessary
               if (!finalOutput && chunkCount >= FORCE_FINAL_OUTPUT_AFTER) {
-                console.log(`🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks`)
-                finalOutput = true
+                console.log(`🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks`);
+                finalOutput = true;
               }
             } catch (error) {
-              console.error('❌ Error processing line:', error, 'Line content:', line)
+              console.error('❌ Error processing line:', error, 'Line content:', line);
             }
 
-            buffer = []
+            buffer = [];
           }
         }
       } catch (error) {
-        console.error('❌ Critical error in stream processing:', error)
+        console.error('❌ Critical error in stream processing:', error);
         if (error.name === 'AbortError') {
-          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds')
+          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds');
         }
       } finally {
-        clearTimeout(timeoutId)
-        clearInterval(checkInactivity)
-        console.log('🟢 Stream processing finished')
-        console.log(`🟢 Total chunks processed: ${chunkCount}`)
-        console.log(`🟢 Total generation events: ${generationEventCount}`)
-        reader.releaseLock()
+        clearTimeout(timeoutId);
+        clearInterval(checkInactivity);
+        console.log('🟢 Stream processing finished');
+        console.log(`🟢 Total chunks processed: ${chunkCount}`);
+        console.log(`🟢 Total generation events: ${generationEventCount}`);
+        reader.releaseLock();
       }
     },
-  })
+  });
+
+  console.log('🟢 Returning stream response');
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/plain' },
+  });
+}
+
 
   console.log('🟢 Returning stream response')
   return new Response(stream, {
