@@ -13,11 +13,9 @@ export const maxDuration = 300
  * @returns {Promise<Response>} The response object
  */
 export async function POST(request: Request) {
-  // Extract username from the request body
   const { username, full } = await request.json()
   console.log(`🟢 Processing request for username: ${username}, full: ${full}`)
 
-  // Fetch user data and check if Wordware has already been started
   const user = await getUser({ username })
 
   if (!user) {
@@ -43,7 +41,7 @@ export async function POST(request: Request) {
     const isRetweet = tweet.isRetweet ? 'RT ' : ''
     const author = tweet.author?.userName ?? username
     const createdAt = tweet.createdAt
-    const text = tweet.text ?? '' // Ensure text is not undefined
+    const text = tweet.text ?? ''
     const formattedText = text
       .split('\n')
       .map((line) => `${line}`)
@@ -63,7 +61,6 @@ export async function POST(request: Request) {
   const promptID = full ? process.env.WORDWARE_FULL_PROMPT_ID : process.env.WORDWARE_ROAST_PROMPT_ID
   console.log(`🟢 Using promptID: ${promptID}`)
 
-  // Make a request to the Wordware API
   console.log('🟢 Sending request to Wordware API')
   const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
     method: 'POST',
@@ -81,7 +78,6 @@ export async function POST(request: Request) {
     }),
   })
 
-  // Get the reader from the response body
   const reader = runResponse.body?.getReader()
   if (!reader || !runResponse.ok) {
     console.log('🟣 | ERROR | Wordware API Error:', runResponse.status, await runResponse.text())
@@ -90,7 +86,6 @@ export async function POST(request: Request) {
 
   console.log('🟢 Received successful response from Wordware API')
 
-  // Update user to indicate Wordware has started
   console.log('🟢 Updating user to indicate Wordware has started')
   await updateUser({
     user: {
@@ -100,7 +95,6 @@ export async function POST(request: Request) {
     },
   })
 
-  // Set up decoder and buffer for processing the stream
   const decoder = new TextDecoder()
   let buffer: string[] = []
   let finalOutput = false
@@ -108,7 +102,6 @@ export async function POST(request: Request) {
   let chunkCount = 0
   let lastChunkTime = Date.now()
 
-  // Function to log memory usage
   function logMemoryUsage() {
     const used = process.memoryUsage()
     console.log('🧠 Memory usage:')
@@ -117,12 +110,20 @@ export async function POST(request: Request) {
     }
   }
 
-  // Create a readable stream to process the response
+  // Implement timeout mechanism
+  const timeoutDuration = 5 * 60 * 1000 // 5 minutes
+  const abortController = new AbortController()
+  const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
+
   const stream = new ReadableStream({
     async start(controller) {
       console.log('🟢 Stream processing started')
       try {
         while (true) {
+          if (abortController.signal.aborted) {
+            throw new Error('Stream processing timed out')
+          }
+
           const { done, value } = await reader.read()
 
           if (done) {
@@ -142,7 +143,6 @@ export async function POST(request: Request) {
             logMemoryUsage()
           }
 
-          // Process the chunk character by character
           for (let i = 0, len = chunk.length; i < len; ++i) {
             const isChunkSeparator = chunk[i] === '\n'
 
@@ -153,12 +153,10 @@ export async function POST(request: Request) {
 
             const line = buffer.join('').trimEnd()
 
-            // Parse the JSON content of each line
             try {
               const content = JSON.parse(line)
               const value = content.value
 
-              // Handle different types of messages in the stream
               if (value.type === 'generation') {
                 console.log(`🔵 Generation event: ${value.state} - ${value.label}`)
                 if (value.state === 'start') {
@@ -184,7 +182,6 @@ export async function POST(request: Request) {
                         paidWordwareCompleted: true,
                       }
                     : { wordwareStarted: true, wordwareCompleted: true }
-                  // Update user with the analysis from Wordware
                   await updateUser({
                     user: {
                       ...user,
@@ -198,7 +195,6 @@ export async function POST(request: Request) {
                   console.log('🟢 Analysis saved to database')
                 } catch (error) {
                   console.error('❌ Error parsing or saving output:', error)
-
                   const statusObject = full
                     ? {
                         paidWordwareStarted: false,
@@ -215,16 +211,19 @@ export async function POST(request: Request) {
                 }
               }
             } catch (error) {
-              console.error('❌ Error processing line:', error)
+              console.error('❌ Error processing line:', error, 'Line content:', line)
             }
 
-            // Reset buffer for the next line
             buffer = []
           }
         }
       } catch (error) {
-        console.error('❌ Error in stream processing:', error)
+        console.error('❌ Critical error in stream processing:', error)
+        if (error.name === 'AbortError') {
+          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds')
+        }
       } finally {
+        clearTimeout(timeoutId)
         console.log('🟢 Stream processing finished')
         console.log(`🟢 Total chunks processed: ${chunkCount}`)
         reader.releaseLock()
@@ -232,7 +231,6 @@ export async function POST(request: Request) {
     },
   })
 
-  // Return the stream as the response
   console.log('🟢 Returning stream response')
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
