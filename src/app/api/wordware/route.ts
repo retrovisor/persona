@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
 
   async function saveAnalysisAndUpdateUser(user, value, full) {
-  console.log(`🟢 Attempting to save analysis. Value received:`, JSON.stringify(value));
+  console.log(`🟢 Attempting to save analysis. Full: ${full}, Value received:`, JSON.stringify(value));
   
   const statusObject = full
     ? {
@@ -127,20 +127,31 @@ export async function POST(request: Request) {
     : { wordwareStarted: true, wordwareCompleted: true };
 
   try {
+    let analysisToSave;
+    if (full) {
+      // For full analysis, overwrite the entire analysis
+      analysisToSave = value.values.output;
+    } else {
+      // For free analysis, only update specific fields
+      analysisToSave = {
+        ...user.analysis, // Keep existing analysis
+        roast: value.values.output.roast,
+        emojis: value.values.output.emojis,
+        // Add any other fields that should be updated for free analysis
+      };
+    }
+
     await updateUser({
       user: {
         ...user,
         ...statusObject,
-        analysis: {
-          ...existingAnalysis,
-          ...value.values.output,
-        },
+        analysis: analysisToSave,
       },
     });
-    console.log('🟢 Analysis saved to database');
+    console.log(`🟢 Analysis saved to database. Full: ${full}`);
   } catch (error) {
     console.error('❌ Error parsing or saving output:', error);
-    const statusObject = full
+    const failureStatusObject = full
       ? {
           paidWordwareStarted: false,
           paidWordwareCompleted: false,
@@ -149,13 +160,12 @@ export async function POST(request: Request) {
     await updateUser({
       user: {
         ...user,
-        ...statusObject,
+        ...failureStatusObject,
       },
     });
-    console.log('🟠 Updated user status to indicate failure');
+    console.log(`🟠 Updated user status to indicate failure. Full: ${full}`);
   }
 }
-
 
 const stream = new ReadableStream({
   async start(controller) {
