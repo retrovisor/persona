@@ -1,4 +1,4 @@
- import { getUser, updateUser } from '@/actions/actions'
+import { getUser, updateUser } from '@/actions/actions'
 import { TweetType } from '@/actions/types'
 import { TwitterAnalysis } from '@/components/analysis/analysis'
 
