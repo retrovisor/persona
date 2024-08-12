@@ -106,22 +106,15 @@ export async function POST(request: Request) {
   let finalOutput = false
   const existingAnalysis = user?.analysis as TwitterAnalysis
   let chunkCount = 0
-  let lastHeartbeat = Date.now()
-  let partialResult = ''
+  let lastChunkTime = Date.now()
 
-  // New function to log memory usage
+  // Function to log memory usage
   function logMemoryUsage() {
     const used = process.memoryUsage()
     console.log('🧠 Memory usage:')
-    for (let key in used) {
-      console.log(`${key}: ${Math.round(used[key] / 1024 / 1024 * 100) / 100} MB`)
+    for (const key in used) {
+      console.log(`${key}: ${Math.round(used[key as keyof NodeJS.MemoryUsage] / 1024 / 1024 * 100) / 100} MB`)
     }
-  }
-
-  // New function to save partial results
-  async function savePartialResult(userId: string, result: string) {
-    console.log(`💾 Saved partial result for user ${userId}. Length: ${result.length}`)
-    // Implement actual saving logic here if needed
   }
 
   // Create a readable stream to process the response
@@ -141,12 +134,11 @@ export async function POST(request: Request) {
           const chunk = decoder.decode(value)
           chunkCount++
           const now = Date.now()
-          console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastHeartbeat}ms since last chunk`)
-          lastHeartbeat = now
+          console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`)
+          lastChunkTime = now
 
           if (chunkCount % 10 === 0) {
             console.log(`🟠 Buffer size: ${buffer.join('').length} characters`)
-            console.log(`🟠 Partial result size: ${partialResult.length} characters`)
             logMemoryUsage()
           }
 
@@ -180,7 +172,6 @@ export async function POST(request: Request) {
                 }
               } else if (value.type === 'chunk') {
                 if (finalOutput) {
-                  partialResult += value.value ?? ''
                   controller.enqueue(value.value ?? '')
                   console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`)
                 }
@@ -223,11 +214,6 @@ export async function POST(request: Request) {
                   console.log('🟠 Updated user status to indicate failure')
                 }
               }
-
-              // Save partial results every 1000 characters
-              if (partialResult.length % 1000 < (partialResult.length - (value.value?.length ?? 0)) % 1000) {
-                await savePartialResult(user.id, partialResult)
-              }
             } catch (error) {
               console.error('❌ Error processing line:', error)
             }
@@ -235,19 +221,12 @@ export async function POST(request: Request) {
             // Reset buffer for the next line
             buffer = []
           }
-
-          // Heartbeat every 5 seconds if no chunk received
-          if (now - lastHeartbeat > 5000) {
-            console.log(`❤️ Heartbeat: ${now - lastHeartbeat}ms since last chunk`)
-            lastHeartbeat = now
-          }
         }
       } catch (error) {
         console.error('❌ Error in stream processing:', error)
       } finally {
         console.log('🟢 Stream processing finished')
         console.log(`🟢 Total chunks processed: ${chunkCount}`)
-        console.log(`🟢 Final partial result size: ${partialResult.length} characters`)
         reader.releaseLock()
       }
     },
