@@ -4,6 +4,9 @@ import { TwitterAnalysis } from '@/components/analysis/analysis';
 
 export const maxDuration = 300;
 
+const TIMEOUT_DURATION = 5 * 60 * 1000; // 5 minutes
+const PARTIAL_SAVE_INTERVAL = 60 * 1000; // 1 minute
+
 export async function POST(request: Request) {
   console.log('🟢 Starting POST request for Wordware API');
 
@@ -80,9 +83,10 @@ export async function POST(request: Request) {
   const decoder = new TextDecoder();
   let buffer = '';
   let finalOutput = false;
-  const existingAnalysis = user?.analysis as TwitterAnalysis;
   let streamedContent = '';
   let chunkCount = 0;
+  let lastSaveTime = Date.now();
+  let lastLogTime = Date.now();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -93,47 +97,68 @@ export async function POST(request: Request) {
           throw new Error('No reader available in the response');
         }
 
-        while (true) {
-          const { done, value } = await reader.read();
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Stream processing timed out')), TIMEOUT_DURATION);
+        });
 
-          if (done) {
-            console.log('🟢 Stream reading completed');
-            break;
-          }
+        const processingPromise = (async () => {
+          while (true) {
+            const { done, value } = await reader.read();
 
-          const chunk = decoder.decode(value, { stream: true });
-          console.log(`🟣 Received chunk #${++chunkCount}: ${chunk.slice(0, 50)}...`);
+            if (done) {
+              console.log('🟢 Stream reading completed');
+              break;
+            }
 
-          buffer += chunk;
-          let newlineIndex;
-          while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, newlineIndex).trim();
-            buffer = buffer.slice(newlineIndex + 1);
+            const chunk = decoder.decode(value, { stream: true });
+            chunkCount++;
 
-            if (line) {
-              try {
-                const content = JSON.parse(line);
-                const value = content.value;
+            const currentTime = Date.now();
+            if (currentTime - lastLogTime > 5000) {  // Log every 5 seconds
+              console.log(`🟣 Processed ${chunkCount} chunks. Last chunk: ${chunk.slice(0, 50)}...`);
+              lastLogTime = currentTime;
+            }
 
-                if (value.type === 'generation') {
-                  console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
-                  finalOutput = (value.state === 'start' && value.label === 'output');
-                } else if (value.type === 'chunk' && finalOutput) {
-                  streamedContent += value.value ?? '';
-                  controller.enqueue(value.value ?? '');
-                  console.log(`🟢 Streamed chunk: ${(value.value ?? '').slice(0, 50)}...`);
-                } else if (value.type === 'outputs') {
-                  console.log('✨ Received final output from Wordware');
-                  await handleFinalOutput(value.values.output, user, full, streamedContent);
+            buffer += chunk;
+            let newlineIndex;
+            while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+              const line = buffer.slice(0, newlineIndex).trim();
+              buffer = buffer.slice(newlineIndex + 1);
+
+              if (line) {
+                try {
+                  const content = JSON.parse(line);
+                  const value = content.value;
+
+                  if (value.type === 'generation') {
+                    console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
+                    finalOutput = (value.state === 'start' && value.label === 'output');
+                  } else if (value.type === 'chunk' && finalOutput) {
+                    streamedContent += value.value ?? '';
+                    controller.enqueue(value.value ?? '');
+                    console.log(`🟢 Streamed chunk: ${(value.value ?? '').slice(0, 50)}...`);
+                  } else if (value.type === 'outputs') {
+                    console.log('✨ Received final output from Wordware');
+                    await handleFinalOutput(value.values.output, user, full, streamedContent);
+                  }
+
+                  // Save partial results periodically
+                  if (currentTime - lastSaveTime > PARTIAL_SAVE_INTERVAL) {
+                    await savePartialResult(user.id, streamedContent);
+                    lastSaveTime = currentTime;
+                  }
+                } catch (error) {
+                  console.error('❌ Error processing line:', line, error);
                 }
-              } catch (error) {
-                console.error('❌ Error processing line:', line, error);
               }
             }
           }
-        }
+        })();
+
+        await Promise.race([processingPromise, timeoutPromise]);
       } catch (error) {
-        console.error('❌ Error in stream processing:', error);
+        console.error('❌ Critical error in stream processing:', error);
+        controller.error(error);
       } finally {
         console.log('🟢 Stream processing finished');
         console.log(`🟢 Total chunks processed: ${chunkCount}`);
@@ -149,7 +174,7 @@ export async function POST(request: Request) {
   });
 }
 
-async function handleFinalOutput(output, user, full, streamedContent) {
+async function handleFinalOutput(output: any, user: any, full: boolean, streamedContent: string) {
   try {
     const statusObject = full
       ? { paidWordwareStarted: true, paidWordwareCompleted: true }
@@ -183,5 +208,15 @@ async function handleFinalOutput(output, user, full, streamedContent) {
       },
     });
     console.log('🟠 Updated user status to indicate failure');
+  }
+}
+
+async function savePartialResult(userId: string, result: string) {
+  try {
+    // Implement logic to save partial result to database
+    // This is a placeholder - replace with actual database update logic
+    console.log(`Saved partial result for user ${userId}. Length: ${result.length}`);
+  } catch (error) {
+    console.error('❌ Error saving partial result:', error);
   }
 }
