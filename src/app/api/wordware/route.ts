@@ -3,7 +3,7 @@ import { TweetType } from '@/actions/types'
 import { TwitterAnalysis } from '@/components/analysis/analysis'
 
 /**
- * Maximum duration for the API route execution (in seconds)
+ * Maximum duration for the API route execution (in seconds) 
  */
 export const maxDuration = 300
 
