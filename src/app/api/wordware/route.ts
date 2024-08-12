@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
   if (!user) {
     console.log(`❌ User not found: ${username}`);
-    throw Error(`User not found: ${username}`);
+    return new Response(JSON.stringify({ error: 'User not found' }), { status: 404 });
   }
 
   if (!full && (user.wordwareCompleted || (user.wordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000))) {
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
   if (full && (user.paidWordwareCompleted || (user.paidWordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000))) {
     console.log(`🟠 Paid Wordware already started or completed for ${username}`);
-    return new Response(JSON.stringify({ error: 'Wordware already started' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'Paid Wordware already started' }), { status: 400 });
   }
 
   function formatTweet(tweet: TweetType) {
@@ -72,8 +72,8 @@ export async function POST(request: Request) {
   await updateUser({
     user: {
       ...user,
-      wordwareStarted: true,
-      wordwareStartedTime: new Date(),
+      [full ? 'paidWordwareStarted' : 'wordwareStarted']: true,
+      [full ? 'paidWordwareStartedTime' : 'wordwareStartedTime']: new Date(),
     },
   });
 
@@ -81,8 +81,8 @@ export async function POST(request: Request) {
   let buffer = '';
   let finalOutput = false;
   const existingAnalysis = user?.analysis as TwitterAnalysis;
-  let updateAttempted = false;
-  let updateSuccessful = false;
+  let streamedContent = '';
+  let chunkCount = 0;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -102,67 +102,32 @@ export async function POST(request: Request) {
           }
 
           const chunk = decoder.decode(value, { stream: true });
-          console.log(`🟣 Received chunk: ${chunk}`);
+          console.log(`🟣 Received chunk #${++chunkCount}: ${chunk.slice(0, 50)}...`);
 
-          // Process character by character
-          for (let i = 0; i < chunk.length; i++) {
-            const char = chunk[i];
-            buffer += char;
+          buffer += chunk;
+          let newlineIndex;
+          while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.slice(0, newlineIndex).trim();
+            buffer = buffer.slice(newlineIndex + 1);
 
-            if (char === '\n') {
-              const line = buffer.trim();
-              buffer = ''; // Reset buffer
+            if (line) {
+              try {
+                const content = JSON.parse(line);
+                const value = content.value;
 
-              if (line) {
-                try {
-                  const content = JSON.parse(line);
-                  const value = content.value;
-
-                  if (value.type === 'generation') {
-                    console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
-                    finalOutput = (value.state === 'start' && value.label === 'output');
-                  } else if (value.type === 'chunk' && finalOutput) {
-                    controller.enqueue(value.value ?? '');
-                  } else if (value.type === 'outputs') {
-                    console.log('✨ Received final output from Wordware:', JSON.stringify(value.values.output));
-                    updateAttempted = true;
-                    try {
-                      const statusObject = full
-                        ? { paidWordwareStarted: true, paidWordwareCompleted: true }
-                        : { wordwareStarted: true, wordwareCompleted: true };
-                      
-                      console.log('🟠 Attempting to update user in database with analysis');
-                      const updateResult = await updateUser({
-                        user: {
-                          ...user,
-                          ...statusObject,
-                          analysis: {
-                            ...existingAnalysis,
-                            ...value.values.output,
-                          },
-                        },
-                      });
-
-                      console.log('🟢 Database update result:', JSON.stringify(updateResult));
-                      updateSuccessful = true;
-                    } catch (error) {
-                      console.error('❌ Error updating user in database:', error);
-                      updateSuccessful = false;
-                      
-                      await updateUser({
-                        user: {
-                          ...user,
-                          ...(full 
-                            ? { paidWordwareStarted: false, paidWordwareCompleted: false }
-                            : { wordwareStarted: false, wordwareCompleted: false }),
-                        },
-                      });
-                      console.log('🟠 Updated user status to indicate failure');
-                    }
-                  }
-                } catch (error) {
-                  console.error('❌ Error processing line:', line, error);
+                if (value.type === 'generation') {
+                  console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
+                  finalOutput = (value.state === 'start' && value.label === 'output');
+                } else if (value.type === 'chunk' && finalOutput) {
+                  streamedContent += value.value ?? '';
+                  controller.enqueue(value.value ?? '');
+                  console.log(`🟢 Streamed chunk: ${(value.value ?? '').slice(0, 50)}...`);
+                } else if (value.type === 'outputs') {
+                  console.log('✨ Received final output from Wordware');
+                  await handleFinalOutput(value.values.output, user, full, streamedContent);
                 }
+              } catch (error) {
+                console.error('❌ Error processing line:', line, error);
               }
             }
           }
@@ -171,8 +136,8 @@ export async function POST(request: Request) {
         console.error('❌ Error in stream processing:', error);
       } finally {
         console.log('🟢 Stream processing finished');
-        console.log('Update attempted:', updateAttempted);
-        console.log('Update successful:', updateSuccessful);
+        console.log(`🟢 Total chunks processed: ${chunkCount}`);
+        console.log(`🟢 Total streamed content length: ${streamedContent.length}`);
         controller.close();
       }
     },
@@ -182,4 +147,41 @@ export async function POST(request: Request) {
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
   });
+}
+
+async function handleFinalOutput(output, user, full, streamedContent) {
+  try {
+    const statusObject = full
+      ? { paidWordwareStarted: true, paidWordwareCompleted: true }
+      : { wordwareStarted: true, wordwareCompleted: true };
+    
+    console.log('🟠 Attempting to update user in database with analysis');
+    console.log(`🟠 Analysis output keys: ${Object.keys(output).join(', ')}`);
+    console.log(`🟠 Streamed content length: ${streamedContent.length}`);
+
+    const updateResult = await updateUser({
+      user: {
+        ...user,
+        ...statusObject,
+        analysis: {
+          ...user.analysis,
+          ...output,
+          fullContent: streamedContent, // Store the full streamed content
+        },
+      },
+    });
+
+    console.log('🟢 Database update result:', JSON.stringify(updateResult));
+  } catch (error) {
+    console.error('❌ Error updating user in database:', error);
+    await updateUser({
+      user: {
+        ...user,
+        ...(full 
+          ? { paidWordwareStarted: false, paidWordwareCompleted: false }
+          : { wordwareStarted: false, wordwareCompleted: false }),
+      },
+    });
+    console.log('🟠 Updated user status to indicate failure');
+  }
 }
