@@ -115,8 +115,7 @@ export async function POST(request: Request) {
   const timeoutDuration = 5 * 60 * 1000 // 5 minutes
   const abortController = new AbortController()
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
-
-  async function saveAnalysisAndUpdateUser(user, value, full) {
+async function saveAnalysisAndUpdateUser(user, value, full) {
   console.log(`🟢 Attempting to save analysis. Value received:`, JSON.stringify(value));
   
   const statusObject = full
@@ -139,22 +138,100 @@ export async function POST(request: Request) {
     });
     console.log('🟢 Analysis saved to database');
   } catch (error) {
-    console.error('❌ Error parsing or saving output:', error);
-    const statusObject = full
+    console.error('❌ Error saving output:', error);
+    const rollbackStatusObject = full
       ? {
           paidWordwareStarted: false,
           paidWordwareCompleted: false,
         }
       : { wordwareStarted: false, wordwareCompleted: false };
+    
+    // Attempt to rollback status to avoid inconsistent state
     await updateUser({
       user: {
         ...user,
-        ...statusObject,
+        ...rollbackStatusObject,
       },
     });
     console.log('🟠 Updated user status to indicate failure');
   }
 }
+
+const stream = new ReadableStream({
+  async start(controller) {
+    console.log('🟢 Stream processing started');
+    let lastProcessedValue = null;
+    try {
+      while (true) {
+        if (abortController.signal.aborted) {
+          throw new Error('Stream processing timed out');
+        }
+
+        const { done, value } = await reader.read();
+
+        if (done) {
+          console.log('🟢 Stream reading completed');
+          if (lastProcessedValue) {
+            console.log('🔄 Attempting to save analysis at the end of stream.');
+            await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
+          }
+          controller.close();
+          return;
+        }
+
+        const chunk = decoder.decode(value);
+        chunkCount++;
+        const now = Date.now();
+        console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`);
+        lastChunkTime = now;
+
+        for (let i = 0, len = chunk.length; i < len; ++i) {
+          const isChunkSeparator = chunk[i] === '\n';
+
+          if (!isChunkSeparator) {
+            buffer.push(chunk[i]);
+            continue;
+          }
+
+          const line = buffer.join('').trimEnd();
+
+          try {
+            const content = JSON.parse(line);
+            const value = content.value;
+
+            if (value.type === 'outputs') {
+              console.log('✨ Received final output from Wordware. Now parsing');
+              lastProcessedValue = value;
+              await saveAnalysisAndUpdateUser(user, value, full);
+            }
+
+            if (!finalOutput && chunkCount >= FORCE_FINAL_OUTPUT_AFTER) {
+              console.log(`🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks`);
+              finalOutput = true;
+            }
+          } catch (error) {
+            console.error('❌ Error processing line:', error, 'Line content:', line);
+          }
+
+          buffer = [];
+        }
+      }
+    } catch (error) {
+      console.error('❌ Critical error in stream processing:', error);
+      if (error.name === 'AbortError') {
+        console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      console.log('🟢 Stream processing finished');
+      if (lastProcessedValue) {
+        console.log('🔄 Attempting final save of analysis.');
+        await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
+      }
+      reader.releaseLock();
+    }
+  },
+});
 
 
 const stream = new ReadableStream({
