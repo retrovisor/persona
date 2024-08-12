@@ -89,15 +89,14 @@ export async function POST(request: Request) {
   await updateUser({
     user: {
       ...user,
-      wordwareStarted: true,
-      wordwareStartedTime: new Date(),
+      [full ? 'paidWordwareStarted' : 'wordwareStarted']: true,
+      [full ? 'paidWordwareStartedTime' : 'wordwareStartedTime']: new Date(),
     },
   })
 
   const decoder = new TextDecoder()
   let buffer: string[] = []
   let finalOutput = false
-  const existingAnalysis = user?.analysis as TwitterAnalysis
   let chunkCount = 0
   let lastChunkTime = Date.now()
   let generationEventCount = 0
@@ -110,11 +109,6 @@ export async function POST(request: Request) {
       console.log(`${key}: ${Math.round(used[key as keyof NodeJS.MemoryUsage] / 1024 / 1024 * 100) / 100} MB`)
     }
   }
-
-  // Implement timeout mechanism
-  const timeoutDuration = 5 * 60 * 1000 // 5 minutes
-  const abortController = new AbortController()
-  const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
 
   async function saveAnalysisAndUpdateUser(user, value, full) {
     console.log(`🟢 Attempting to save analysis. Full: ${full}, Value received:`, JSON.stringify(value));
@@ -173,16 +167,11 @@ export async function POST(request: Request) {
       let lastProcessedValue = null;
       try {
         while (true) {
-          if (abortController.signal.aborted) {
-            throw new Error('Stream processing timed out');
-          }
-
           const { done, value } = await reader.read();
 
           if (done) {
             console.log('🟢 Stream reading completed');
             if (lastProcessedValue) {
-              // Attempt to save the last processed value if it exists
               console.log('🔄 Attempting to save analysis at the end of stream.');
               await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
             }
@@ -255,11 +244,7 @@ export async function POST(request: Request) {
         }
       } catch (error) {
         console.error('❌ Critical error in stream processing:', error);
-        if (error.name === 'AbortError') {
-          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds');
-        }
       } finally {
-        clearTimeout(timeoutId);
         console.log('🟢 Stream processing finished');
         console.log(`🟢 Total chunks processed: ${chunkCount}`);
         console.log(`🟢 Total generation events: ${generationEventCount}`);
