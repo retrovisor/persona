@@ -1,4 +1,4 @@
-// import { getUser, updateUser } from '@/actions/actions'
+ import { getUser, updateUser } from '@/actions/actions'
 import { TweetType } from '@/actions/types'
 import { TwitterAnalysis } from '@/components/analysis/analysis'
 
@@ -14,25 +14,25 @@ export const maxDuration = 300
  */
 export async function POST(request: Request) {
   const { username, full } = await request.json()
-  console.log(`🟢 Processing request for username: ${username}, full: ${full}`)
+  console.log(🟢 Processing request for username: ${username}, full: ${full})
 
   const user = await getUser({ username })
 
   if (!user) {
-    console.log(`❌ User not found: ${username}`)
-    throw Error(`User not found: ${username}`)
+    console.log(❌ User not found: ${username})
+    throw Error(User not found: ${username})
   }
 
   if (!full) {
     if (user.wordwareCompleted || (user.wordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000)) {
-      console.log(`🟠 Wordware already started or completed for ${username}`)
+      console.log(🟠 Wordware already started or completed for ${username})
       return Response.json({ error: 'Wordware already started' })
     }
   }
 
   if (full) {
     if (user.paidWordwareCompleted || (user.paidWordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000)) {
-      console.log(`🟠 Paid Wordware already started or completed for ${username}`)
+      console.log(🟠 Paid Wordware already started or completed for ${username})
       return Response.json({ error: 'Wordware already started' })
     }
   }
@@ -44,33 +44,33 @@ export async function POST(request: Request) {
     const text = tweet.text ?? ''
     const formattedText = text
       .split('\n')
-      .map((line) => `${line}`)
-      .join(`\n> `)
-    return `**${isRetweet}@${author} - ${createdAt}**
+      .map((line) => ${line})
+      .join(\n> )
+    return **${isRetweet}@${author} - ${createdAt}**
 
 > ${formattedText}
 
-*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*`
+*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*
   }
 
   const tweets = user.tweets as TweetType[]
 
   const tweetsMarkdown = tweets.map(formatTweet).join('\n---\n\n')
-  console.log(`🟢 Prepared ${tweets.length} tweets for analysis`)
+  console.log(🟢 Prepared ${tweets.length} tweets for analysis)
 
   const promptID = full ? process.env.WORDWARE_FULL_PROMPT_ID : process.env.WORDWARE_ROAST_PROMPT_ID
-  console.log(`🟢 Using promptID: ${promptID}`)
+  console.log(🟢 Using promptID: ${promptID})
 
   console.log('🟢 Sending request to Wordware API')
-  const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
+  const runResponse = await fetch(https://app.wordware.ai/api/released-app/${promptID}/run, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
+      Authorization: Bearer ${process.env.WORDWARE_API_KEY},
     },
     body: JSON.stringify({
       inputs: {
-        tweets: `Tweets: ${tweetsMarkdown}`,
+        tweets: Tweets: ${tweetsMarkdown},
         profilePicture: user.profilePicture,
         profileInfo: user.fullProfile,
         version: '^1.0',
@@ -97,23 +97,23 @@ export async function POST(request: Request) {
 
   const decoder = new TextDecoder()
   let buffer: string[] = []
-  let finalOutput = false // Set to const if never reassigned
+  let finalOutput = false
   const existingAnalysis = user?.analysis as TwitterAnalysis
   let chunkCount = 0
   let lastChunkTime = Date.now()
   let generationEventCount = 0
-  const FORCE_FINAL_OUTPUT_AFTER = 50 // Set to const if never reassigned
+  const FORCE_FINAL_OUTPUT_AFTER = 50 // Force finalOutput after this many chunks if not set
 
   function logMemoryUsage() {
     const used = process.memoryUsage()
     console.log('🧠 Memory usage:')
     for (const key in used) {
-      console.log(`${key}: ${Math.round(used[key as keyof NodeJS.MemoryUsage] / 1024 / 1024 * 100) / 100} MB`)
+      console.log(${key}: ${Math.round(used[key as keyof NodeJS.MemoryUsage] / 1024 / 1024 * 100) / 100} MB)
     }
   }
 
-  async function saveAnalysisAndUpdateUser(user: unknown, value: unknown, full: boolean) {
-    console.log(`🟢 Attempting to save analysis. Full: ${full}, Value received:`, JSON.stringify(value));
+  async function saveAnalysisAndUpdateUser(user: any, value: any, full: boolean) {
+    console.log(🟢 Attempting to save analysis. Full: ${full}, Value received:, JSON.stringify(value));
     
     const statusObject = full
       ? {
@@ -123,10 +123,10 @@ export async function POST(request: Request) {
       : { wordwareStarted: true, wordwareCompleted: true };
 
     try {
-      const analysisToSave = full ? (value as any).values.output : {
+      const analysisToSave = full ? value.values.output : {
         ...existingAnalysis,
-        roast: (value as any).values.output.roast,
-        emojis: (value as any).values.output.emojis,
+        roast: value.values.output.roast,
+        emojis: value.values.output.emojis,
       };
 
       await updateUser({
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
           analysis: analysisToSave,
         },
       });
-      console.log(`🟢 Analysis saved to database. Full: ${full}`);
+      console.log(🟢 Analysis saved to database. Full: ${full});
     } catch (error) {
       console.error('❌ Error parsing or saving output:', error);
       const failureStatusObject = full
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
           ...failureStatusObject,
         },
       });
-      console.log(`🟠 Updated user status to indicate failure. Full: ${full}`);
+      console.log(🟠 Updated user status to indicate failure. Full: ${full});
     }
   }
 
@@ -162,118 +162,121 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      console.log('🟢 Stream processing started');
-      let lastProcessedValue: unknown = null;
-      const INACTIVITY_TIMEOUT = 10000; // 10 seconds of inactivity to consider stream complete
+      console.log('🟢 Stream processing started')
+      let lastProcessedValue = null
+      const INACTIVITY_TIMEOUT = 10000 // 10 seconds of inactivity to consider stream complete
 
       const checkInactivity = setInterval(async () => {
         if (Date.now() - lastChunkTime > INACTIVITY_TIMEOUT && lastProcessedValue) {
-          console.log('🔵 Inactivity timeout reached. Saving final analysis.');
-          clearInterval(checkInactivity);
-          await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
-          controller.close();
+          console.log('🔵 Inactivity timeout reached. Saving final analysis.')
+          clearInterval(checkInactivity)
+          await saveAnalysisAndUpdateUser(user, lastProcessedValue, full)
+          controller.close()
         }
-      }, 1000);
+      }, 1000)
 
       try {
         while (true) {
           if (abortController.signal.aborted) {
-            throw new Error('Stream processing timed out');
+            throw new Error('Stream processing timed out')
           }
 
-          const { done, value } = await reader.read();
+          const { done, value } = await reader.read()
 
           if (done) {
-            console.log('🟢 Stream reading completed');
-            clearInterval(checkInactivity);
+            console.log('🟢 Stream reading completed')
+            clearInterval(checkInactivity)
             if (lastProcessedValue) {
-              console.log('🔄 Attempting to save analysis at the end of stream.');
-              await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
+              console.log('🔄 Attempting to save analysis at the end of stream.')
+              await saveAnalysisAndUpdateUser(user, lastProcessedValue, full)
             }
-            controller.close();
-            return;
+            controller.close()
+            return
           }
 
-          const chunk = decoder.decode(value);
-          chunkCount++;
-          const now = Date.now();
-          console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`);
-          lastChunkTime = now;
+          const chunk = decoder.decode(value)
+          chunkCount++
+          const now = Date.now()
+          console.log(🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk)
+          lastChunkTime = now
 
           // Log entire chunk content for first 5 chunks
           if (chunkCount <= 5) {
-            console.log(`🔍 Full chunk content: ${chunk}`);
+            console.log(🔍 Full chunk content: ${chunk})
           }
 
           if (chunkCount % 10 === 0) {
-            console.log(`🟠 Buffer size: ${buffer.join('').length} characters`);
-            logMemoryUsage();
+            console.log(🟠 Buffer size: ${buffer.join('').length} characters)
+            logMemoryUsage()
           }
 
           for (let i = 0, len = chunk.length; i < len; ++i) {
-            const isChunkSeparator = chunk[i] === '\n';
+            const isChunkSeparator = chunk[i] === '\n'
 
             if (!isChunkSeparator) {
-              buffer.push(chunk[i]);
-              continue;
+              buffer.push(chunk[i])
+              continue
             }
 
-            const line = buffer.join('').trimEnd();
+            const line = buffer.join('').trimEnd()
 
             try {
-              const content = JSON.parse(line);
-              const value = content.value;
+              const content = JSON.parse(line)
+              const value = content.value
 
               if (value.type === 'generation') {
-                console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
-                generationEventCount++;
-                if (value.state === 'start' && value.label === 'output') {
-                  finalOutput = true;
-                  console.log('🔵 finalOutput set to true due to generation start event');
-                }
-                if (value.state === 'end' && value.label === 'output') {
-                  finalOutput = false;
-                  console.log('🔵 finalOutput set to false due to generation end event');
+                console.log(🔵 Generation event: ${value.state} - ${value.label})
+                generationEventCount++
+                if (value.state === 'start') {
+                  if (value.label === 'output') {
+                    finalOutput = true
+                    console.log('🔵 finalOutput set to true')
+                  }
+                } else {
+                  if (value.label === 'output') {
+                    finalOutput = false
+                    console.log('🔵 finalOutput set to false')
+                  }
                 }
               } else if (value.type === 'chunk') {
-                controller.enqueue(value.value ?? '');
-                console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`);
+                controller.enqueue(value.value ?? '')
+                console.log(🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...)
               } else if (value.type === 'outputs') {
-                console.log('✨ Received final output from Wordware. Now parsing');
-                lastProcessedValue = value;
-                finalOutput = true; // Final output received, flag should be set
+                console.log('✨ Received final output from Wordware. Now parsing')
+                lastProcessedValue = value
+                // We don't save immediately here, we wait for inactivity or stream end
               }
 
               // Force finalOutput if necessary
               if (!finalOutput && chunkCount >= FORCE_FINAL_OUTPUT_AFTER) {
-                console.log(`🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks`);
-                finalOutput = true;
+                console.log(🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks)
+                finalOutput = true
               }
             } catch (error) {
-              console.error('❌ Error processing line:', error, 'Line content:', line);
+              console.error('❌ Error processing line:', error, 'Line content:', line)
             }
 
-            buffer = [];
+            buffer = []
           }
         }
       } catch (error) {
-        console.error('❌ Critical error in stream processing:', error);
+        console.error('❌ Critical error in stream processing:', error)
         if (error.name === 'AbortError') {
-          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds');
+          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds')
         }
       } finally {
-        clearTimeout(timeoutId);
-        clearInterval(checkInactivity);
-        console.log('🟢 Stream processing finished');
-        console.log(`🟢 Total chunks processed: ${chunkCount}`);
-        console.log(`🟢 Total generation events: ${generationEventCount}`);
-        reader.releaseLock();
+        clearTimeout(timeoutId)
+        clearInterval(checkInactivity)
+        console.log('🟢 Stream processing finished')
+        console.log(🟢 Total chunks processed: ${chunkCount})
+        console.log(🟢 Total generation events: ${generationEventCount})
+        reader.releaseLock()
       }
     },
-  });
+  })
 
   console.log('🟢 Returning stream response')
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
-  });
+  })
 }
