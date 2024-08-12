@@ -45,7 +45,7 @@ export const PaywallCard: React.FC = () => {
   });
 
   // Remove PostHog and use a static price or another logic
-  const paywallFlag = searchParams.get('stripe') ?? '100'; // Default price in cents ($10.00)
+  const paywallFlag = searchParams.get('stripe') ?? '10'; // Default price in cents ($10.00)
   console.log('Final paywallFlag value:', paywallFlag);
 
   async function onSubmit(values: z.infer<typeof FormSchema>) {
