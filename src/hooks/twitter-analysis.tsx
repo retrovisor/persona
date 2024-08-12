@@ -52,7 +52,7 @@ export const useTwitterAnalysis = (user: SelectUser, disableAnalysis: boolean = 
     }
 
     runAnalysis()
-  }, [])
+}, [disableAnalysis, result, runPaidWordwareAnalysis, runWordwareAnalysis, shouldRunTweetScrape, user])
 
   function initializeSteps(user: SelectUser): Steps {
     return {
