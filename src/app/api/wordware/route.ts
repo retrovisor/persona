@@ -1,4 +1,4 @@
-import { getUser, updateUser } from '@/actions/actions'
+// import { getUser, updateUser } from '@/actions/actions'
 import { TweetType } from '@/actions/types'
 import { TwitterAnalysis } from '@/components/analysis/analysis'
 
@@ -97,12 +97,12 @@ export async function POST(request: Request) {
 
   const decoder = new TextDecoder()
   let buffer: string[] = []
-  let finalOutput = false
+  let finalOutput = false // Set to const if never reassigned
   const existingAnalysis = user?.analysis as TwitterAnalysis
   let chunkCount = 0
   let lastChunkTime = Date.now()
   let generationEventCount = 0
-  const FORCE_FINAL_OUTPUT_AFTER = 50 // Force finalOutput after this many chunks if not set
+  const FORCE_FINAL_OUTPUT_AFTER = 50 // Set to const if never reassigned
 
   function logMemoryUsage() {
     const used = process.memoryUsage()
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     }
   }
 
-  async function saveAnalysisAndUpdateUser(user: any, value: any, full: boolean) {
+  async function saveAnalysisAndUpdateUser(user: unknown, value: unknown, full: boolean) {
     console.log(`🟢 Attempting to save analysis. Full: ${full}, Value received:`, JSON.stringify(value));
     
     const statusObject = full
@@ -123,10 +123,10 @@ export async function POST(request: Request) {
       : { wordwareStarted: true, wordwareCompleted: true };
 
     try {
-      const analysisToSave = full ? value.values.output : {
+      const analysisToSave = full ? (value as any).values.output : {
         ...existingAnalysis,
-        roast: value.values.output.roast,
-        emojis: value.values.output.emojis,
+        roast: (value as any).values.output.roast,
+        emojis: (value as any).values.output.emojis,
       };
 
       await updateUser({
@@ -160,16 +160,11 @@ export async function POST(request: Request) {
   const abortController = new AbortController()
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
 
-  async function POST(request: Request) {
-  // ... [code before stream processing]
-
   const stream = new ReadableStream({
     async start(controller) {
       console.log('🟢 Stream processing started');
-      let lastProcessedValue = null;
+      let lastProcessedValue: unknown = null;
       const INACTIVITY_TIMEOUT = 10000; // 10 seconds of inactivity to consider stream complete
-      let finalOutput = false;
-      const FORCE_FINAL_OUTPUT_AFTER = 50; // Force finalOutput after this many chunks if not set
 
       const checkInactivity = setInterval(async () => {
         if (Date.now() - lastChunkTime > INACTIVITY_TIMEOUT && lastProcessedValue) {
@@ -277,15 +272,8 @@ export async function POST(request: Request) {
     },
   });
 
-  console.log('🟢 Returning stream response');
-  return new Response(stream, {
-    headers: { 'Content-Type': 'text/plain' },
-  });
-}
-
-
   console.log('🟢 Returning stream response')
   return new Response(stream, {
     headers: { 'Content-Type': 'text/plain' },
-  })
+  });
 }
