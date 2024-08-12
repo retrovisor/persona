@@ -101,6 +101,8 @@ export async function POST(request: Request) {
   const existingAnalysis = user?.analysis as TwitterAnalysis
   let chunkCount = 0
   let lastChunkTime = Date.now()
+  let generationEventCount = 0
+  const FORCE_FINAL_OUTPUT_AFTER = 50 // Force finalOutput after this many chunks if not set
 
   function logMemoryUsage() {
     const used = process.memoryUsage()
@@ -138,6 +140,11 @@ export async function POST(request: Request) {
           console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`)
           lastChunkTime = now
 
+          // Log entire chunk content for first 5 chunks
+          if (chunkCount <= 5) {
+            console.log(`🔍 Full chunk content: ${chunk}`)
+          }
+
           if (chunkCount % 10 === 0) {
             console.log(`🟠 Buffer size: ${buffer.join('').length} characters`)
             logMemoryUsage()
@@ -159,20 +166,22 @@ export async function POST(request: Request) {
 
               if (value.type === 'generation') {
                 console.log(`🔵 Generation event: ${value.state} - ${value.label}`)
+                generationEventCount++
                 if (value.state === 'start') {
                   if (value.label === 'output') {
                     finalOutput = true
+                    console.log('🔵 finalOutput set to true')
                   }
                 } else {
                   if (value.label === 'output') {
                     finalOutput = false
+                    console.log('🔵 finalOutput set to false')
                   }
                 }
               } else if (value.type === 'chunk') {
-                if (finalOutput) {
-                  controller.enqueue(value.value ?? '')
-                  console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`)
-                }
+                // Removed finalOutput condition for debugging
+                controller.enqueue(value.value ?? '')
+                console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`)
               } else if (value.type === 'outputs') {
                 console.log('✨ Received final output from Wordware. Now parsing')
                 try {
@@ -210,6 +219,12 @@ export async function POST(request: Request) {
                   console.log('🟠 Updated user status to indicate failure')
                 }
               }
+
+              // Force finalOutput if necessary
+              if (!finalOutput && chunkCount >= FORCE_FINAL_OUTPUT_AFTER) {
+                console.log(`🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks`)
+                finalOutput = true
+              }
             } catch (error) {
               console.error('❌ Error processing line:', error, 'Line content:', line)
             }
@@ -226,6 +241,7 @@ export async function POST(request: Request) {
         clearTimeout(timeoutId)
         console.log('🟢 Stream processing finished')
         console.log(`🟢 Total chunks processed: ${chunkCount}`)
+        console.log(`🟢 Total generation events: ${generationEventCount}`)
         reader.releaseLock()
       }
     },
