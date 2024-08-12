@@ -129,9 +129,14 @@ export const updateUser = async ({ user }: { user: InsertUser }) => {
     throw new Error('Username is required for updating a user')
   }
 
-  await db.update(users).set(user).where(eq(users.lowercaseUsername, user.lowercaseUsername))
-}
+  console.log('Updating user:', user.username);
+  console.log('Paid completed:', user.paidWordwareCompleted);
+  console.log('Free completed:', user.wordwareCompleted);
 
+  await db.update(users).set(user).where(eq(users.lowercaseUsername, user.lowercaseUsername))
+
+  console.log('User update completed');
+}
 export const handleNewUsername = async ({ username, redirectPath }: { username: string; redirectPath?: string }) => {
   const user = await getUser({ username })
   if (user) {
