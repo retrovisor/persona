@@ -3,7 +3,7 @@ import { TweetType } from '@/actions/types'
 import { TwitterAnalysis } from '@/components/analysis/analysis'
 
 /**
- * Maximum duration for the API route execution (in seconds) 
+ * Maximum duration for the API route execution (in seconds)
  */
 export const maxDuration = 300
 
@@ -14,26 +14,26 @@ export const maxDuration = 300
  */
 export async function POST(request: Request) {
   const { username, full } = await request.json()
-  console.log(🟢 Processing request for username: ${username}, full: ${full})
+  console.log(`🟢 Processing request for username: ${username}, full: ${full}`)
 
   const user = await getUser({ username })
 
   if (!user) {
-    console.log(❌ User not found: ${username})
-    throw Error(User not found: ${username})
+    console.log(`❌ User not found: ${username}`)
+    throw Error(`User not found: ${username}`)
   }
 
   if (!full) {
     if (user.wordwareCompleted || (user.wordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000)) {
-      console.log(🟠 Wordware already started or completed for ${username})
-      return Response.json({ error: 'Wordware already started' })
+      console.log(`🟠 Wordware already started or completed for ${username}`)
+      return new Response(JSON.stringify({ error: 'Wordware already started' }), { status: 400 })
     }
   }
 
   if (full) {
     if (user.paidWordwareCompleted || (user.paidWordwareStarted && Date.now() - user.createdAt.getTime() < 3 * 60 * 1000)) {
-      console.log(🟠 Paid Wordware already started or completed for ${username})
-      return Response.json({ error: 'Wordware already started' })
+      console.log(`🟠 Paid Wordware already started or completed for ${username}`)
+      return new Response(JSON.stringify({ error: 'Wordware already started' }), { status: 400 })
     }
   }
 
@@ -44,33 +44,32 @@ export async function POST(request: Request) {
     const text = tweet.text ?? ''
     const formattedText = text
       .split('\n')
-      .map((line) => ${line})
-      .join(\n> )
-    return **${isRetweet}@${author} - ${createdAt}**
+      .map((line) => `${line}`)
+      .join(`\n> `)
+    return `**${isRetweet}@${author} - ${createdAt}**
 
 > ${formattedText}
 
-*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*
+*retweets: ${tweet.retweetCount ?? 0}, replies: ${tweet.replyCount ?? 0}, likes: ${tweet.likeCount ?? 0}, quotes: ${tweet.quoteCount ?? 0}, views: ${tweet.viewCount ?? 0}*`
   }
 
   const tweets = user.tweets as TweetType[]
-
   const tweetsMarkdown = tweets.map(formatTweet).join('\n---\n\n')
-  console.log(🟢 Prepared ${tweets.length} tweets for analysis)
+  console.log(`🟢 Prepared ${tweets.length} tweets for analysis`)
 
   const promptID = full ? process.env.WORDWARE_FULL_PROMPT_ID : process.env.WORDWARE_ROAST_PROMPT_ID
-  console.log(🟢 Using promptID: ${promptID})
+  console.log(`🟢 Using promptID: ${promptID}`)
 
   console.log('🟢 Sending request to Wordware API')
-  const runResponse = await fetch(https://app.wordware.ai/api/released-app/${promptID}/run, {
+  const runResponse = await fetch(`https://app.wordware.ai/api/released-app/${promptID}/run`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: Bearer ${process.env.WORDWARE_API_KEY},
+      Authorization: `Bearer ${process.env.WORDWARE_API_KEY}`,
     },
     body: JSON.stringify({
       inputs: {
-        tweets: Tweets: ${tweetsMarkdown},
+        tweets: `Tweets: ${tweetsMarkdown}`,
         profilePicture: user.profilePicture,
         profileInfo: user.fullProfile,
         version: '^1.0',
@@ -81,7 +80,7 @@ export async function POST(request: Request) {
   const reader = runResponse.body?.getReader()
   if (!reader || !runResponse.ok) {
     console.log('🟣 | ERROR | Wordware API Error:', runResponse.status, await runResponse.text())
-    return Response.json({ error: 'No reader' }, { status: 400 })
+    return new Response(JSON.stringify({ error: 'No reader' }), { status: 400 })
   }
 
   console.log('🟢 Received successful response from Wordware API')
@@ -108,7 +107,7 @@ export async function POST(request: Request) {
     const used = process.memoryUsage()
     console.log('🧠 Memory usage:')
     for (const key in used) {
-      console.log(${key}: ${Math.round(used[key as keyof NodeJS.MemoryUsage] / 1024 / 1024 * 100) / 100} MB)
+      console.log(`${key}: ${Math.round(used[key as keyof NodeJS.MemoryUsage] / 1024 / 1024 * 100) / 100} MB`)
     }
   }
 
@@ -117,135 +116,157 @@ export async function POST(request: Request) {
   const abortController = new AbortController()
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      console.log('🟢 Stream processing started')
-      try {
-        while (true) {
-          if (abortController.signal.aborted) {
-            throw new Error('Stream processing timed out')
-          }
-
-          const { done, value } = await reader.read()
-
-          if (done) {
-            console.log('🟢 Stream reading completed')
-            controller.close()
-            return
-          }
-
-          const chunk = decoder.decode(value)
-          chunkCount++
-          const now = Date.now()
-          console.log(🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk)
-          lastChunkTime = now
-
-          // Log entire chunk content for first 5 chunks
-          if (chunkCount <= 5) {
-            console.log(🔍 Full chunk content: ${chunk})
-          }
-
-          if (chunkCount % 10 === 0) {
-            console.log(🟠 Buffer size: ${buffer.join('').length} characters)
-            logMemoryUsage()
-          }
-
-          for (let i = 0, len = chunk.length; i < len; ++i) {
-            const isChunkSeparator = chunk[i] === '\n'
-
-            if (!isChunkSeparator) {
-              buffer.push(chunk[i])
-              continue
-            }
-
-            const line = buffer.join('').trimEnd()
-
-            try {
-              const content = JSON.parse(line)
-              const value = content.value
-
-              if (value.type === 'generation') {
-                console.log(🔵 Generation event: ${value.state} - ${value.label})
-                generationEventCount++
-                if (value.state === 'start') {
-                  if (value.label === 'output') {
-                    finalOutput = true
-                    console.log('🔵 finalOutput set to true')
-                  }
-                } else {
-                  if (value.label === 'output') {
-                    finalOutput = false
-                    console.log('🔵 finalOutput set to false')
-                  }
-                }
-              } else if (value.type === 'chunk') {
-                // Removed finalOutput condition for debugging
-                controller.enqueue(value.value ?? '')
-                console.log(🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...)
-              } else if (value.type === 'outputs') {
-                console.log('✨ Received final output from Wordware. Now parsing')
-                try {
-                  const statusObject = full
-                    ? {
-                        paidWordwareStarted: true,
-                        paidWordwareCompleted: true,
-                      }
-                    : { wordwareStarted: true, wordwareCompleted: true }
-                  await updateUser({
-                    user: {
-                      ...user,
-                      ...statusObject,
-                      analysis: {
-                        ...existingAnalysis,
-                        ...value.values.output,
-                      },
-                    },
-                  })
-                  console.log('🟢 Analysis saved to database')
-                } catch (error) {
-                  console.error('❌ Error parsing or saving output:', error)
-                  const statusObject = full
-                    ? {
-                        paidWordwareStarted: false,
-                        paidWordwareCompleted: false,
-                      }
-                    : { wordwareStarted: false, wordwareCompleted: false }
-                  await updateUser({
-                    user: {
-                      ...user,
-                      ...statusObject,
-                    },
-                  })
-                  console.log('🟠 Updated user status to indicate failure')
-                }
-              }
-
-              // Force finalOutput if necessary
-              if (!finalOutput && chunkCount >= FORCE_FINAL_OUTPUT_AFTER) {
-                console.log(🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks)
-                finalOutput = true
-              }
-            } catch (error) {
-              console.error('❌ Error processing line:', error, 'Line content:', line)
-            }
-
-            buffer = []
-          }
-        }
-      } catch (error) {
-        console.error('❌ Critical error in stream processing:', error)
-        if (error.name === 'AbortError') {
-          console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds')
-        }
-      } finally {
-        clearTimeout(timeoutId)
-        console.log('🟢 Stream processing finished')
-        console.log(🟢 Total chunks processed: ${chunkCount})
-        console.log(🟢 Total generation events: ${generationEventCount})
-        reader.releaseLock()
+  async function saveAnalysisAndUpdateUser(user, value, full) {
+  console.log(`🟢 Attempting to save analysis. Value received:`, JSON.stringify(value));
+  
+  const statusObject = full
+    ? {
+        paidWordwareStarted: true,
+        paidWordwareCompleted: true,
       }
-    },
-  })
+    : { wordwareStarted: true, wordwareCompleted: true };
+
+  try {
+    await updateUser({
+      user: {
+        ...user,
+        ...statusObject,
+        analysis: {
+          ...existingAnalysis,
+          ...value.values.output,
+        },
+      },
+    });
+    console.log('🟢 Analysis saved to database');
+  } catch (error) {
+    console.error('❌ Error parsing or saving output:', error);
+    const statusObject = full
+      ? {
+          paidWordwareStarted: false,
+          paidWordwareCompleted: false,
+        }
+      : { wordwareStarted: false, wordwareCompleted: false };
+    await updateUser({
+      user: {
+        ...user,
+        ...statusObject,
+      },
+    });
+    console.log('🟠 Updated user status to indicate failure');
+  }
+}
+
+
+const stream = new ReadableStream({
+  async start(controller) {
+    console.log('🟢 Stream processing started');
+    let lastProcessedValue = null;
+    try {
+      while (true) {
+        if (abortController.signal.aborted) {
+          throw new Error('Stream processing timed out');
+        }
+
+        const { done, value } = await reader.read();
+
+        if (done) {
+          console.log('🟢 Stream reading completed');
+          if (lastProcessedValue) {
+            // Attempt to save the last processed value if it exists
+            console.log('🔄 Attempting to save analysis at the end of stream.');
+            await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
+          }
+          controller.close();
+          return;
+        }
+
+        const chunk = decoder.decode(value);
+        chunkCount++;
+        const now = Date.now();
+        console.log(`🟣 Chunk #${chunkCount} received at ${new Date(now).toISOString()}, ${now - lastChunkTime}ms since last chunk`);
+        lastChunkTime = now;
+
+        if (chunkCount <= 5) {
+          console.log(`🔍 Full chunk content: ${chunk}`);
+        }
+
+        if (chunkCount % 10 === 0) {
+          console.log(`🟠 Buffer size: ${buffer.join('').length} characters`);
+          logMemoryUsage();
+        }
+
+        for (let i = 0, len = chunk.length; i < len; ++i) {
+          const isChunkSeparator = chunk[i] === '\n';
+
+          if (!isChunkSeparator) {
+            buffer.push(chunk[i]);
+            continue;
+          }
+
+          const line = buffer.join('').trimEnd();
+
+          try {
+            const content = JSON.parse(line);
+            const value = content.value;
+
+            if (value.type === 'generation') {
+              console.log(`🔵 Generation event: ${value.state} - ${value.label}`);
+              generationEventCount++;
+              if (value.state === 'start') {
+                if (value.label === 'output') {
+                  finalOutput = true;
+                  console.log('🔵 finalOutput set to true');
+                }
+              } else {
+                if (value.label === 'output') {
+                  finalOutput = false;
+                  console.log('🔵 finalOutput set to false');
+                }
+              }
+            } else if (value.type === 'chunk') {
+              controller.enqueue(value.value ?? '');
+              console.log(`🟢 Enqueued chunk: ${(value.value ?? '').slice(0, 50)}...`);
+            } else if (value.type === 'outputs') {
+              console.log('✨ Received final output from Wordware. Now parsing');
+              lastProcessedValue = value;
+              await saveAnalysisAndUpdateUser(user, value, full);
+            }
+
+            if (!finalOutput && chunkCount >= FORCE_FINAL_OUTPUT_AFTER) {
+              console.log(`🔴 Forcing finalOutput to true after ${FORCE_FINAL_OUTPUT_AFTER} chunks`);
+              finalOutput = true;
+            }
+          } catch (error) {
+            console.error('❌ Error processing line:', error, 'Line content:', line);
+          }
+
+          buffer = [];
+        }
+      }
+    } catch (error) {
+      console.error('❌ Critical error in stream processing:', error);
+      if (error.name === 'AbortError') {
+        console.error('🚫 Stream processing timed out after', timeoutDuration / 1000, 'seconds');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      console.log('🟢 Stream processing finished');
+      console.log(`🟢 Total chunks processed: ${chunkCount}`);
+      console.log(`🟢 Total generation events: ${generationEventCount}`);
+      if (lastProcessedValue) {
+        // Attempt to save analysis if it wasn't saved during the process
+        console.log('🔄 Attempting final save of analysis.');
+        await saveAnalysisAndUpdateUser(user, lastProcessedValue, full);
+      }
+      reader.releaseLock();
+    }
+  },
+});
+
+
+
+
+  
 
   console.log('🟢 Returning stream response')
   return new Response(stream, {
