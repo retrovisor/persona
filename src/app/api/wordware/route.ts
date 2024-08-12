@@ -2,16 +2,8 @@ import { getUser, updateUser } from '@/actions/actions'
 import { TweetType } from '@/actions/types'
 import { TwitterAnalysis } from '@/components/analysis/analysis'
 
-/**
- * Maximum duration for the API route execution (in seconds)
- */
 export const maxDuration = 300
 
-/**
- * POST handler for the Wordware API route
- * @param {Request} request - The incoming request object
- * @returns {Promise<Response>} The response object
- */
 export async function POST(request: Request) {
   const { username, full } = await request.json()
   console.log(`🟢 Processing request for username: ${username}, full: ${full}`)
@@ -95,13 +87,10 @@ export async function POST(request: Request) {
   })
 
   const decoder = new TextDecoder()
-  let buffer: string[] = []
-  let finalOutput = false
   const existingAnalysis = user?.analysis as TwitterAnalysis
   let chunkCount = 0
-  let lastChunkTime = Date.now()
   let generationEventCount = 0
-  const FORCE_FINAL_OUTPUT_AFTER = 50 // Force finalOutput after this many chunks if not set
+  const FORCE_FINAL_OUTPUT_AFTER = 50
 
   function logMemoryUsage() {
     const used = process.memoryUsage()
@@ -111,8 +100,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // Implement timeout mechanism
-  const timeoutDuration = 5 * 60 * 1000 // 5 minutes
+  const timeoutDuration = 5 * 60 * 1000
   const abortController = new AbortController()
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration)
 
@@ -219,7 +207,7 @@ export async function POST(request: Request) {
               } else if (value.type === 'outputs') {
                 console.log(`✨ Wordware ${full ? 'Full' : 'Roast'}:`, value.values.output, '. Now parsing')
                 finalAnalysis = value.values.output;
-                break; // Exit the loop when we receive the final output
+                break;
               }
 
               buffer = []
@@ -249,7 +237,6 @@ export async function POST(request: Request) {
           await saveAnalysisAndUpdateUser(user, { values: { output: finalAnalysis } }, full);
         } else {
           console.error(`No final analysis received for ${full ? 'Full' : 'Roast'} version`);
-          // Attempt to save the last processed chunk if available
           if (buffer.length > 0) {
             console.log('Attempting to save last processed chunk');
             await saveAnalysisAndUpdateUser(user, { values: { output: buffer.join('') } }, full);
