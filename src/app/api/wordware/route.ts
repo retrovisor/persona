@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       inputs: {
         tweets: `Tweets: ${tweetsMarkdown}`,
-          version: '^1.0',
+          version: '^1.3',
       },
     }),
   })
