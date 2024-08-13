@@ -62,7 +62,9 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       inputs: {
         tweets: `Tweets: ${tweetsMarkdown}`,
-         version: '^3.2',
+         profilePicture: user.profilePicture,
+        profileInfo: user.fullProfile,
+        version: '^1.0',
       },
     }),
   })
