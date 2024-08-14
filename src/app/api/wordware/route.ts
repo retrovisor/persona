@@ -1,7 +1,7 @@
 // Apply Edge Runtime
-export const config = {
-  runtime: 'edge',
-};
+export const runtime = 'edge';
+
+
 
 import { getUser, updateUser } from '@/actions/actions';
 import { TweetType } from '@/actions/types';
