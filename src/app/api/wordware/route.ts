@@ -1,5 +1,3 @@
-// Apply Edge Runtime
-export const runtime = 'edge';
 
 
 
@@ -7,8 +5,7 @@ import { getUser, updateUser } from '@/actions/actions';
 import { TweetType } from '@/actions/types';
 import { TwitterAnalysis } from '@/components/analysis/analysis';
 
-export const maxDuration = 300;
-
+ 
 export async function POST(request: Request) {
   const { username, full } = await request.json();
   console.log(`🟢 Processing request for username: ${username}, full: ${full}`);
