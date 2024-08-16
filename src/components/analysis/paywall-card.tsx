@@ -27,7 +27,7 @@ export const PriceButton = ({ username, price }: { username: string; price: stri
     }}
     className={cn('w-full bg-green-600 hover:bg-green-700', !PERSONALITY_PART1_PAYWALL && 'max-w-md')}
     type="button">
-    Unlock Full Analysis (${parseInt(price) / 100})
+    Unlocki Full Analysis (${parseInt(price) / 100})
   </Button>
 )
 
