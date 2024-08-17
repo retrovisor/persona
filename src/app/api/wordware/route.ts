@@ -1,11 +1,38 @@
-
-
-
 import { getUser, updateUser } from '@/actions/actions';
 import { TweetType } from '@/actions/types';
 import { TwitterAnalysis } from '@/components/analysis/analysis';
 
- 
+// Utility function to sanitize strings, removing any problematic characters
+function sanitizeString(input: string): string {
+  return input.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '');
+}
+
+// Utility function to validate and sanitize JSON data
+async function validateAndSanitizeJSON(data: any): Promise<any> {
+  try {
+    const sanitized = JSON.stringify(data);
+    return JSON.parse(sanitized);
+  } catch (error) {
+    console.error("❌ JSON Validation Failed:", error);
+    throw new Error("Invalid JSON data");
+  }
+}
+
+// Utility function to safely save analysis and update the user
+async function saveAnalysisSafely(user, analysisData, full) {
+  try {
+    await saveAnalysisAndUpdateUser(user, analysisData, full);
+  } catch (error) {
+    console.warn("⚠️ Initial save failed, attempting with sanitized data");
+    const sanitizedData = sanitizeString(JSON.stringify(analysisData));
+    try {
+      await saveAnalysisAndUpdateUser(user, { values: { output: JSON.parse(sanitizedData) } }, full);
+    } catch (secondError) {
+      console.error("❌ Both save attempts failed:", secondError);
+    }
+  }
+}
+
 export async function POST(request: Request) {
   const { username, full } = await request.json();
   console.log(`🟢 Processing request for username: ${username}, full: ${full}`);
@@ -107,7 +134,7 @@ export async function POST(request: Request) {
     }
 
     console.log(`🟢 Attempting to save analysis. Value received:`, JSON.stringify(value));
-    
+
     const statusObject = full
       ? {
           paidWordwareStarted: true,
@@ -228,14 +255,16 @@ export async function POST(request: Request) {
       } finally {
         clearTimeout(timeoutId);
         reader.releaseLock();
-        
+
         if (finalAnalysis) {
-          await saveAnalysisAndUpdateUser(user, { values: { output: finalAnalysis } }, full);
+          finalAnalysis = await validateAndSanitizeJSON(finalAnalysis); // Validate JSON before saving
+          await saveAnalysisSafely(user, { values: { output: finalAnalysis } }, full);
         } else {
           console.error(`No final analysis received for ${full ? 'Full' : 'Roast'} version`);
           if (buffer.length > 0) {
             console.log('Attempting to save last processed chunk');
-            await saveAnalysisAndUpdateUser(user, { values: { output: buffer.join('') } }, full);
+            const lastChunkData = sanitizeString(buffer.join(''));
+            await saveAnalysisSafely(user, { values: { output: lastChunkData } }, full);
           }
         }
 
