@@ -33,6 +33,46 @@ async function saveAnalysisSafely(user, analysisData, full) {
   }
 }
 
+// Function to save analysis and update the user
+async function saveAnalysisAndUpdateUser(user, value, full) {
+  if (!value || !value.values || !value.values.output) {
+    console.error('❌ Attempted to save empty or invalid analysis');
+    return;
+  }
+
+  console.log(`🟢 Attempting to save analysis. Value received:`, JSON.stringify(value));
+
+  const statusObject = full
+    ? {
+        paidWordwareStarted: true,
+        paidWordwareCompleted: true,
+      }
+    : { wordwareStarted: true, wordwareCompleted: true };
+
+  try {
+    await updateUser({
+      user: {
+        ...user,
+        ...statusObject,
+        analysis: {
+          ...user.analysis,
+          ...value.values.output,
+        },
+      },
+    });
+    console.log('🟢 Analysis saved to database');
+  } catch (error) {
+    console.error('❌ Error parsing or saving output:', error);
+    await updateUser({
+      user: {
+        ...user,
+        ...statusObject,
+      },
+    });
+    console.log('🟠 Updated user status to indicate failure');
+  }
+}
+
 export async function POST(request: Request) {
   const { username, full } = await request.json();
   console.log(`🟢 Processing request for username: ${username}, full: ${full}`);
@@ -126,51 +166,6 @@ export async function POST(request: Request) {
   const timeoutDuration = 5 * 60 * 1000;
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => abortController.abort(), timeoutDuration);
-
-  async function saveAnalysisAndUpdateUser(user, value, full) {
-    if (!value || !value.values || !value.values.output) {
-      console.error('❌ Attempted to save empty or invalid analysis');
-      return;
-    }
-
-    console.log(`🟢 Attempting to save analysis. Value received:`, JSON.stringify(value));
-
-    const statusObject = full
-      ? {
-          paidWordwareStarted: true,
-          paidWordwareCompleted: true,
-        }
-      : { wordwareStarted: true, wordwareCompleted: true };
-
-    try {
-      await updateUser({
-        user: {
-          ...user,
-          ...statusObject,
-          analysis: {
-            ...existingAnalysis,
-            ...value.values.output,
-          },
-        },
-      });
-      console.log('🟢 Analysis saved to database');
-    } catch (error) {
-      console.error('❌ Error parsing or saving output:', error);
-      const statusObject = full
-        ? {
-            paidWordwareStarted: false,
-            paidWordwareCompleted: false,
-          }
-        : { wordwareStarted: false, wordwareCompleted: false };
-      await updateUser({
-        user: {
-          ...user,
-          ...statusObject,
-        },
-      });
-      console.log('🟠 Updated user status to indicate failure');
-    }
-  }
 
   const stream = new ReadableStream({
     async start(controller) {
